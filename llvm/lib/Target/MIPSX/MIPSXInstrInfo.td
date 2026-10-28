@@ -17,15 +17,34 @@
 // Operands
 //===----------------------------------------------------------------------===//
 
-// A 17-bit signed immediate or memory offset, or a symbolic expression.
-def Imm17AsmOperand : AsmOperandClass {
-  let Name = "Imm17";
+// 17-bit signed immediates and memory offsets: a constant, a symbolic
+// expression, or a relocation operator. Which operators are allowed depends
+// on the instruction (docs/abi.md section 10.6).
+class Imm17Operand<string name> : AsmOperandClass {
+  let Name = name;
   let RenderMethod = "addImmOperands";
-  let DiagnosticType = "InvalidImm17";
+  let DiagnosticType = "Invalid" # name;
 }
+
+// addi immediate: %hi, %lo, %gprel, %w.
 def simm17 : Operand<i32> {
-  let ParserMatchClass = Imm17AsmOperand;
+  let ParserMatchClass = Imm17Operand<"Imm17">;
   let EncoderMethod = "getImm17OpValue";
+  let DecoderMethod = "decodeSImmOperand<17>";
+}
+
+// Memory offset: %hi, %lo, %gprel.
+def memoff17 : Operand<i32> {
+  let ParserMatchClass = Imm17Operand<"MemOff17">;
+  let EncoderMethod = "getImm17OpValue";
+  let DecoderMethod = "decodeSImmOperand<17>";
+}
+
+// jspci immediate: %call, %w.
+def jimm17 : Operand<i32> {
+  let ParserMatchClass = Imm17Operand<"JImm17">;
+  let EncoderMethod = "getImm17OpValue";
+  let DecoderMethod = "decodeSImmOperand<17>";
 }
 
 // Branch target: a label, or a constant giving the 16-bit word displacement
@@ -38,6 +57,8 @@ def BrTargetAsmOperand : AsmOperandClass {
 def brtarget : Operand<OtherVT> {
   let ParserMatchClass = BrTargetAsmOperand;
   let EncoderMethod = "getBranchTargetOpValue";
+  let DecoderMethod = "decodeSImmOperand<16>";
+  let PrintMethod = "printBranchTarget";
   let OperandType = "OPERAND_PCREL";
 }
 
@@ -50,6 +71,7 @@ def ShAmtAsmOperand : AsmOperandClass {
 def shamt : Operand<i32> {
   let ParserMatchClass = ShAmtAsmOperand;
   let EncoderMethod = "getShiftAmountOpValue";
+  let DecoderMethod = "decodeShiftAmount";
 }
 
 // Trap vector, 0 to 255.
@@ -61,6 +83,7 @@ def TrapVecAsmOperand : AsmOperandClass {
 def trapvec : Operand<i32> {
   let ParserMatchClass = TrapVecAsmOperand;
   let EncoderMethod = "getTrapVectorOpValue";
+  let DecoderMethod = "decodeTrapVector";
 }
 
 include "MIPSXInstrFormats.td"
@@ -69,18 +92,18 @@ include "MIPSXInstrFormats.td"
 // Memory instructions (TY = 10)
 //===----------------------------------------------------------------------===//
 
-def LD : FLoad<0b000, "ld", simm17>;
-def ST : FStore<0b010, "st", simm17>;
+def LD : FLoad<0b000, "ld", memoff17>;
+def ST : FStore<0b010, "st", memoff17>;
 
 // The ES3890 reuses the manual's coprocessor and floating-point memory
 // opcodes as byte and halfword accesses (processor spec section 3).
 let Predicates = [HasES3890] in {
-  def LDBU : FLoad<0b100, "ldbu", simm17>;
-  def LDB  : FLoad<0b101, "ldb", simm17>;
-  def LDHU : FLoad<0b001, "ldhu", simm17>;
-  def LDH  : FLoad<0b111, "ldh", simm17>;
-  def STB  : FStore<0b011, "stb", simm17>;
-  def STH  : FStore<0b110, "sth", simm17>;
+  def LDBU : FLoad<0b100, "ldbu", memoff17>;
+  def LDB  : FLoad<0b101, "ldb", memoff17>;
+  def LDHU : FLoad<0b001, "ldhu", memoff17>;
+  def LDH  : FLoad<0b111, "ldh", memoff17>;
+  def STB  : FStore<0b011, "stb", memoff17>;
+  def STH  : FStore<0b110, "sth", memoff17>;
 }
 
 //===----------------------------------------------------------------------===//
@@ -149,7 +172,7 @@ def ADDI : FImm<0b100, (outs GPR:$rd), (ins GPR:$rs1, simm17:$imm),
 // Jump to word address Src1 + imm; Dest = this word address + 3. Both delay
 // slots always execute.
 let hasDelaySlot = 1, hasSideEffects = 1 in
-def JSPCI : FImm<0b000, (outs GPR:$rd), (ins GPR:$rs1, simm17:$imm),
+def JSPCI : FImm<0b000, (outs GPR:$rd), (ins GPR:$rs1, jimm17:$imm),
                  "jspci\t$rs1,#$imm,$rd">;
 
 let hasSideEffects = 1 in {
@@ -199,7 +222,8 @@ def HSC : MIPSXInst<0b11, 0b001, (outs), (ins), "hsc"> {
 
 //===----------------------------------------------------------------------===//
 // Aliases (docs/abi.md section 10.5). The others (li, la, call, jmp, lsl,
-// lsr and the swapped branch conditions) are expanded by the assembly parser.
+// lsr and the swapped branch conditions) are expanded by the assembly
+// parser; lsl and lsr are printed by MIPSXInstPrinter.
 //===----------------------------------------------------------------------===//
 
 def : InstAlias<"nop", (ADD R0, R0, R0), 2>;

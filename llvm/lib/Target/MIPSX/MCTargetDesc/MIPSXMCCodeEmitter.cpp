@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "MCTargetDesc/MIPSXFixupKinds.h"
+#include "MCTargetDesc/MIPSXMCAsmInfo.h"
 #include "MCTargetDesc/MIPSXMCTargetDesc.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
@@ -84,9 +85,27 @@ unsigned MIPSXMCCodeEmitter::getMachineOpValue(
   llvm_unreachable("Expression operand without an encoder method");
 }
 
-// A 17-bit immediate or memory offset. A symbolic expression becomes an
-// R_MIPSX_ABS17 fixup; the relocation operators (%hi, %lo, ...) select the
-// other imm17 fixups once the assembler parses them.
+// A 17-bit immediate or memory offset. A relocation operator selects the
+// fixup kind; a plain symbolic expression is R_MIPSX_ABS17.
+static MIPSX::Fixups getImm17FixupKind(const MCExpr *Expr) {
+  const auto *SE = dyn_cast<MCSpecifierExpr>(Expr);
+  if (!SE)
+    return MIPSX::fixup_mipsx_abs17;
+  switch (SE->getSpecifier()) {
+  case MIPSX::S_HI:
+    return MIPSX::fixup_mipsx_hi17;
+  case MIPSX::S_LO:
+    return MIPSX::fixup_mipsx_lo15;
+  case MIPSX::S_GPREL:
+    return MIPSX::fixup_mipsx_gprel17;
+  case MIPSX::S_CALL:
+    return MIPSX::fixup_mipsx_call17;
+  case MIPSX::S_W:
+    return MIPSX::fixup_mipsx_word17;
+  }
+  llvm_unreachable("Unknown MIPS-X specifier");
+}
+
 unsigned
 MIPSXMCCodeEmitter::getImm17OpValue(const MCInst &Inst, unsigned OpNo,
                                     SmallVectorImpl<MCFixup> &Fixups,
@@ -96,8 +115,11 @@ MIPSXMCCodeEmitter::getImm17OpValue(const MCInst &Inst, unsigned OpNo,
     return static_cast<unsigned>(MCOp.getImm()) & 0x1ffff;
 
   assert(MCOp.isExpr() && "Expected an immediate or an expression");
-  Fixups.push_back(
-      MCFixup::create(0, MCOp.getExpr(), MIPSX::fixup_mipsx_abs17));
+  const MCExpr *Expr = MCOp.getExpr();
+  int64_t Value;
+  if (Expr->evaluateAsAbsolute(Value))
+    return static_cast<unsigned>(Value) & 0x1ffff;
+  Fixups.push_back(MCFixup::create(0, Expr, getImm17FixupKind(Expr)));
   return 0;
 }
 
