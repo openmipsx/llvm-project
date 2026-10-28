@@ -36,6 +36,7 @@ def FeatureLongCalls
 //===----------------------------------------------------------------------===//
 
 include "MIPSXRegisterInfo.td"
+include "MIPSXCallingConv.td"
 include "MIPSXInstrInfo.td"
 
 defm : RemapAllTargetPseudoPointerOperands<GPR>;

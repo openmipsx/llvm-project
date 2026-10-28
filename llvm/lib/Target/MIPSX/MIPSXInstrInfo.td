@@ -27,7 +27,7 @@ class Imm17Operand<string name> : AsmOperandClass {
 }
 
 // addi immediate: %hi, %lo, %gprel, %w.
-def simm17 : Operand<i32> {
+def simm17 : Operand<i32>, ImmLeaf<i32, [{ return isInt<17>(Imm); }]> {
   let ParserMatchClass = Imm17Operand<"Imm17">;
   let EncoderMethod = "getImm17OpValue";
   let DecoderMethod = "decodeSImmOperand<17>";
@@ -87,6 +87,32 @@ def trapvec : Operand<i32> {
 }
 
 include "MIPSXInstrFormats.td"
+
+//===----------------------------------------------------------------------===//
+// Selection DAG nodes
+//===----------------------------------------------------------------------===//
+
+def SDT_MIPSXCall : SDTypeProfile<0, -1, [SDTCisVT<0, i32>]>;
+def SDT_MIPSXCallSeqStart : SDCallSeqStart<[SDTCisVT<0, i32>,
+                                            SDTCisVT<1, i32>]>;
+def SDT_MIPSXCallSeqEnd : SDCallSeqEnd<[SDTCisVT<0, i32>, SDTCisVT<1, i32>]>;
+
+// Direct call through jspci and a linker-selected code base.
+def MIPSXcall : SDNode<"MIPSXISD::CALL", SDT_MIPSXCall,
+                       [SDNPHasChain, SDNPOutGlue, SDNPOptInGlue,
+                        SDNPVariadic]>;
+// Return: jspci r31,#0,r0.
+def MIPSXret : SDNode<"MIPSXISD::RET_GLUE", SDTNone,
+                      [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
+
+def callseq_start : SDNode<"ISD::CALLSEQ_START", SDT_MIPSXCallSeqStart,
+                           [SDNPHasChain, SDNPOutGlue]>;
+def callseq_end : SDNode<"ISD::CALLSEQ_END", SDT_MIPSXCallSeqEnd,
+                         [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue]>;
+
+// Address operands of loads and stores: (base register or frame index,
+// 17-bit offset).
+def AddrRegImm : ComplexPattern<iPTR, 2, "selectAddrRegImm", [frameindex], []>;
 
 //===----------------------------------------------------------------------===//
 // Memory instructions (TY = 10)
@@ -232,3 +258,97 @@ def : InstAlias<"ret", (JSPCI R0, R31, 0), 1>;
 def : InstAlias<"b\t$dst", (BEQ R0, R0, brtarget:$dst), 1>;
 def : InstAlias<"bra\t$dst", (BEQ R0, R0, brtarget:$dst), 0>;
 def : InstAlias<"bsq\t$dst", (BEQSQ R0, R0, brtarget:$dst), 1>;
+
+//===----------------------------------------------------------------------===//
+// Code generation pseudo-instructions
+//===----------------------------------------------------------------------===//
+
+// The call frame is reserved in the prologue, so these only mark the call
+// sequence.
+let Defs = [R29], Uses = [R29] in {
+  def ADJCALLSTACKDOWN : Pseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
+                                [(callseq_start timm:$amt1, timm:$amt2)]>;
+  def ADJCALLSTACKUP : Pseudo<(outs), (ins i32imm:$amt1, i32imm:$amt2),
+                              [(callseq_end timm:$amt1, timm:$amt2)]>;
+}
+
+// A direct call, emitted as jspci r0,#%call(sym),r31. The delay slots are
+// added by MIPSXHazardPadding.
+def calltarget : Operand<i32>;
+let isCall = 1, hasDelaySlot = 1, Defs = [R31], Uses = [R29] in
+def CALL : Pseudo<(outs), (ins calltarget:$dst), []>;
+def : Pat<(MIPSXcall tglobaladdr:$dst), (CALL tglobaladdr:$dst)>;
+def : Pat<(MIPSXcall texternalsym:$dst), (CALL texternalsym:$dst)>;
+
+// Return, emitted as jspci r31,#0,r0.
+let isReturn = 1, isTerminator = 1, isBarrier = 1, hasDelaySlot = 1,
+    Uses = [R31] in
+def RET : Pseudo<(outs), (ins), [(MIPSXret)]>;
+
+// Unconditional branch: beq r0,r0,label, marked as a barrier.
+let isBranch = 1, isTerminator = 1, isBarrier = 1, hasDelaySlot = 1,
+    isCodeGenOnly = 1 in
+def B : MIPSXInst<0b00, 0b001, (outs), (ins brtarget:$dst), "b\t$dst"> {
+  bits<16> dst;
+  let Inst{26-16} = 0;
+  let Inst{15-0} = dst;
+}
+def : Pat<(br bb:$dst), (B bb:$dst)>;
+
+//===----------------------------------------------------------------------===//
+// Patterns
+//===----------------------------------------------------------------------===//
+
+// Constants: one addi if they fit in 17 bits, otherwise the hi/lo form of
+// docs/abi.md section 6.1.
+def HI17 : SDNodeXForm<imm, [{
+  return CurDAG->getSignedTargetConstant(int32_t(N->getSExtValue()) >> 15,
+                                         SDLoc(N), MVT::i32);
+}]>;
+def LO15 : SDNodeXForm<imm, [{
+  return CurDAG->getTargetConstant(N->getZExtValue() & 0x7fff, SDLoc(N),
+                                   MVT::i32);
+}]>;
+def : Pat<(i32 simm17:$imm), (ADDI R0, simm17:$imm)>;
+def : Pat<(i32 imm:$imm),
+          (ADDI (SH R0, (ADDI R0, (HI17 imm:$imm)), 17), (LO15 imm:$imm))>;
+
+// Arithmetic and logic.
+def : Pat<(add GPR:$a, GPR:$b), (ADD GPR:$a, GPR:$b)>;
+def : Pat<(add GPR:$a, simm17:$imm), (ADDI GPR:$a, simm17:$imm)>;
+def : Pat<(sub GPR:$a, GPR:$b), (SUB GPR:$a, GPR:$b)>;
+def : Pat<(and GPR:$a, GPR:$b), (AND GPR:$a, GPR:$b)>;
+def : Pat<(or GPR:$a, GPR:$b), (OR GPR:$a, GPR:$b)>;
+def : Pat<(xor GPR:$a, GPR:$b), (XOR GPR:$a, GPR:$b)>;
+def : Pat<(not GPR:$a), (NOT GPR:$a)>;
+def : Pat<(and GPR:$b, (not GPR:$a)), (BIC GPR:$a, GPR:$b)>;
+
+// Shifts by a constant: lsl is sh r0,rs,rd,#(32-k), lsr is sh rs,r0,rd,#k.
+def uimm5nz : ImmLeaf<i32, [{ return Imm > 0 && Imm < 32; }]>;
+def ShlAmt : SDNodeXForm<imm, [{
+  return CurDAG->getTargetConstant(32 - N->getZExtValue(), SDLoc(N), MVT::i32);
+}]>;
+def : Pat<(shl GPR:$a, uimm5nz:$k), (SH R0, GPR:$a, (ShlAmt imm:$k))>;
+def : Pat<(srl GPR:$a, uimm5nz:$k), (SH GPR:$a, R0, uimm5nz:$k)>;
+def : Pat<(sra GPR:$a, uimm5nz:$k), (ASR GPR:$a, uimm5nz:$k)>;
+
+// Loads and stores of every width.
+class LoadPat<PatFrag op, Instruction inst>
+    : Pat<(i32 (op (AddrRegImm GPR:$rs1, memoff17:$off))),
+          (inst GPR:$rs1, memoff17:$off)>;
+class StorePat<PatFrag op, Instruction inst>
+    : Pat<(op GPR:$val, (AddrRegImm GPR:$rs1, memoff17:$off)),
+          (inst GPR:$val, GPR:$rs1, memoff17:$off)>;
+
+def : LoadPat<load, LD>;
+def : StorePat<store, ST>;
+let Predicates = [HasES3890] in {
+  def : LoadPat<sextloadi8, LDB>;
+  def : LoadPat<zextloadi8, LDBU>;
+  def : LoadPat<extloadi8, LDBU>;
+  def : LoadPat<sextloadi16, LDH>;
+  def : LoadPat<zextloadi16, LDHU>;
+  def : LoadPat<extloadi16, LDHU>;
+  def : StorePat<truncstorei8, STB>;
+  def : StorePat<truncstorei16, STH>;
+}

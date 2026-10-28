@@ -50,6 +50,8 @@ class FLoad<bits<3> op, string opstr, Operand offty>
   let Inst{21-17} = rd;
   let Inst{16-0} = off;
   let mayLoad = 1;
+  // A load must not overwrite its own address register (abi section 9, P2).
+  let Constraints = "@earlyclobber $rd";
 }
 
 class FStore<bits<3> op, string opstr, Operand offty>
@@ -123,4 +125,12 @@ class FImmFunc<bits<3> op, bits<12> func, string asmstr>
     : MIPSXInst<0b11, op, (outs), (ins), asmstr> {
   let Inst{26-12} = 0;
   let Inst{11-0} = func;
+}
+
+// Code generation pseudo-instructions, expanded before or during emission.
+class Pseudo<dag outs, dag ins, list<dag> pattern>
+    : MIPSXInst<0b00, 0b000, outs, ins, "", pattern> {
+  let isPseudo = 1;
+  let isCodeGenOnly = 1;
+  let Inst = 0;
 }
