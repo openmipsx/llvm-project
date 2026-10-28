@@ -149,6 +149,14 @@ ASM_FUNCTION_LANAI_RE = re.compile(
     flags=(re.M | re.S),
 )
 
+ASM_FUNCTION_MIPSX_RE = re.compile(
+    r'^_?(?P<func>[^:]+):[ \t]*;+[ \t]*@"?(?P=func)"?\n'
+    r"(?:[ \t]+.cfi_startproc\n)?"  # drop optional cfi noise
+    r"(?P<body>.*?)\s*"
+    r".Lfunc_end[0-9]+:\n",
+    flags=(re.M | re.S),
+)
+
 ASM_FUNCTION_SPARC_RE = re.compile(
     r'^_?(?P<func>[^:]+):[ \t]*!+[ \t]*@"?(?P=func)"?\n'
     r"(?P<body>.*?)\s*"
@@ -455,6 +463,17 @@ def scrub_asm_lanai(asm, args):
     return asm
 
 
+def scrub_asm_mipsx(asm, args):
+    # Scrub runs of whitespace out of the assembly, but leave the leading
+    # whitespace in place.
+    asm = common.SCRUB_WHITESPACE_RE.sub(r" ", asm)
+    # Expand the tabs used for indentation.
+    asm = string.expandtabs(asm, 2)
+    # Strip trailing whitespace.
+    asm = common.SCRUB_TRAILING_WHITESPACE_RE.sub(r"", asm)
+    return asm
+
+
 def scrub_asm_sparc(asm, args):
     # Scrub runs of whitespace out of the assembly, but leave the leading
     # whitespace in place.
@@ -596,6 +615,7 @@ def get_run_handler(triple):
         "thumbv7-apple-ios": (scrub_asm_arm_eabi, ASM_FUNCTION_ARM_IOS_RE),
         "m68k": (scrub_asm_m68k, ASM_FUNCTION_M68K_RE),
         "mips": (scrub_asm_mips, ASM_FUNCTION_MIPS_RE),
+        "mipsx": (scrub_asm_mipsx, ASM_FUNCTION_MIPSX_RE),
         "msp430": (scrub_asm_msp430, ASM_FUNCTION_MSP430_RE),
         "avr": (scrub_asm_avr, ASM_FUNCTION_AVR_RE),
         "ppc32": (scrub_asm_powerpc, ASM_FUNCTION_PPC_RE),
