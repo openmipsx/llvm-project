@@ -135,6 +135,18 @@ for op, f in ops32:
     loop2("t32_" + op, len(A32), len(B32), 32, 32, "a32", "b32", body)
     groups.append(("t32_" + op, expect2(A32, B32, g)))
 
+# Multipliers that known bits show to be narrow: n bits (signed) are done
+# inline with mstep (n <= 17), wider ones by __mulsi3.
+for k in [1, 2, 8, 15, 16, 17, 18]:
+    body = ["%%ys = shl i32 %%y, %d" % (32 - k), "%%yn = ashr i32 %%ys, %d" % (32 - k),
+            "%v = mul i32 %x, %yn"]
+    loop2("t32_mul_s%d" % k, len(A32), len(B32), 32, 32, "a32", "b32", body)
+    groups.append(("t32_mul_s%d" % k, expect2(A32, B32, lambda x, y, k=k: x * s(y, k))))
+for k in [8, 16]:
+    body = ["%%xn = and i32 %%x, %d" % ((1 << k) - 1), "%v = mul i32 %xn, %y"]
+    loop2("t32_mul_u%d" % k, len(A32), len(B32), 32, 32, "a32", "b32", body)
+    groups.append(("t32_mul_u%d" % k, expect2(A32, B32, lambda x, y, k=k: (x & ((1 << k) - 1)) * y)))
+
 # Quotient and remainder together (one __udivsi3 call).
 loop2("t32_udivrem", len(A32), len(B32), 32, 32, "a32", "b32",
       ["%q = udiv i32 %x, %y", "%r = urem i32 %x, %y", "%r3 = shl i32 %r, 3",

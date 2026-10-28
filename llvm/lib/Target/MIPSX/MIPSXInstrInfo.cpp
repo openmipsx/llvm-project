@@ -306,6 +306,8 @@ unsigned MIPSXInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
     return getInlineAsmLength(MI.getOperand(0).getSymbolName(),
                               MF.getTarget().getMCAsmInfo());
   }
+  if (MI.getOpcode() == MIPSX::MULSTEPS) // And a nop that may come before.
+    return 4 * (MI.getOperand(3).getImm() + 3);
   if (MI.hasDelaySlot())
     return 12;
   if (MI.mayLoad())

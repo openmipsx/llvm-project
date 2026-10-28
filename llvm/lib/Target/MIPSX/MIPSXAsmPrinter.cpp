@@ -48,6 +48,7 @@ public:
   StringRef getPassName() const override { return "MIPS-X Assembly Printer"; }
 
   void emitInstruction(const MachineInstr *MI) override;
+  void emitMulSteps(const MachineInstr &MI);
   bool PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
                        const char *ExtraCode, raw_ostream &O) override;
   bool PrintAsmMemoryOperand(const MachineInstr *MI, unsigned OpNo,
@@ -205,6 +206,27 @@ bool MIPSXAsmPrinter::PrintAsmMemoryOperand(const MachineInstr *MI,
   return false;
 }
 
+// MULSTEPS rd,a,md,n: movtos md,md; nop; mstart a,rd; n - 1 times
+// mstep rd,a,rd. The nop keeps rule P4 (abi section 9): the instruction
+// after movtos must not be an mstart.
+void MIPSXAsmPrinter::emitMulSteps(const MachineInstr &MI) {
+  Register Rd = MI.getOperand(0).getReg();
+  Register A = MI.getOperand(1).getReg();
+  Register MD = MI.getOperand(2).getReg();
+  int64_t N = MI.getOperand(3).getImm();
+  EmitToStreamer(*OutStreamer,
+                 MCInstBuilder(MIPSX::MOVTOS).addReg(MIPSX::MD).addReg(MD));
+  EmitToStreamer(*OutStreamer, MCInstBuilder(MIPSX::ADD)
+                                   .addReg(MIPSX::R0)
+                                   .addReg(MIPSX::R0)
+                                   .addReg(MIPSX::R0));
+  EmitToStreamer(*OutStreamer,
+                 MCInstBuilder(MIPSX::MSTART).addReg(Rd).addReg(A));
+  for (int64_t K = 1; K < N; ++K)
+    EmitToStreamer(*OutStreamer,
+                   MCInstBuilder(MIPSX::MSTEP).addReg(Rd).addReg(Rd).addReg(A));
+}
+
 void MIPSXAsmPrinter::emitInstruction(const MachineInstr *MI) {
   MIPSX_MC::verifyInstructionPredicates(MI->getOpcode(),
                                         getSubtargetInfo().getFeatureBits());
@@ -212,6 +234,10 @@ void MIPSXAsmPrinter::emitInstruction(const MachineInstr *MI) {
   MachineBasicBlock::const_instr_iterator I = MI->getIterator();
   MachineBasicBlock::const_instr_iterator E = MI->getParent()->instr_end();
   do {
+    if (I->getOpcode() == MIPSX::MULSTEPS) {
+      emitMulSteps(*I);
+      continue;
+    }
     MCInst TmpInst;
     lowerInstruction(&*I, TmpInst);
     EmitToStreamer(*OutStreamer, TmpInst);

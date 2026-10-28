@@ -16,12 +16,16 @@
 //   (in layout order, across block boundaries) gets a nop in between (P1).
 //   The filler never puts a load in a second delay slot, nor a load in the
 //   first one read by the second, so no load is in flight at a branch
-//   target, a call or a return (section 9.2) and layout order is enough.
+//   target, a call or a return (section 9.2) and layout order is enough;
+// - a MULSTEPS right after another, whose last mstep its movtos would
+//   follow, or right after a call or inline assembly, which may end with an
+//   mstep (__mulsi3 has two in its return delay slots), gets a nop too (P4).
 //
 // P2 (a load must not overwrite its address register) is ensured by an
 // early-clobber constraint on load destinations; spill reloads (LDfi) use
-// reserved base registers instead. The code generator does not
-// emit the MD instructions (P4).
+// reserved base registers instead. The only MD instructions the code
+// generator emits are inside MULSTEPS, which the AsmPrinter expands with the
+// nop that P4 needs after its movtos.
 //
 //===----------------------------------------------------------------------===//
 
@@ -41,6 +45,7 @@ using namespace llvm;
 
 STATISTIC(NumDelaySlotNops, "Number of nops in delay slots");
 STATISTIC(NumLoadNops, "Number of nops after loads");
+STATISTIC(NumMulStepsNops, "Number of nops before a MULSTEPS");
 
 namespace {
 
@@ -121,8 +126,9 @@ bool MIPSXHazardPadding::runOnMachineFunction(MachineFunction &MF) {
     }
   }
 
-  // Load-use pairs, in layout order.
+  // Load-use pairs and MULSTEPS pairs, in layout order.
   Register Loaded;
+  bool AfterMDStep = false; // The last instruction may have been an mstep.
   for (MachineBasicBlock &MBB : MF) {
     for (auto I = MBB.instr_begin(), E = MBB.instr_end(); I != E; ++I) {
       MachineInstr &MI = *I;
@@ -135,6 +141,15 @@ bool MIPSXHazardPadding::runOnMachineFunction(MachineFunction &MF) {
         ++NumLoadNops;
         Changed = true;
       }
+      bool IsMulSteps = MI.getOpcode() == MIPSX::MULSTEPS;
+      if (IsMulSteps && AfterMDStep) {
+        insertNop(MBB, I, TII, MI.getDebugLoc());
+        ++NumMulStepsNops;
+        Changed = true;
+      }
+      // A call's delay slots do not change what comes after its return.
+      if (!MI.isInsideBundle())
+        AfterMDStep = IsMulSteps || MI.isCall() || MI.isInlineAsm();
       Loaded = loadDest(MI);
       if (Loaded && MI.isInsideBundle() &&
           (std::next(I) == E || !std::next(I)->isInsideBundle()))

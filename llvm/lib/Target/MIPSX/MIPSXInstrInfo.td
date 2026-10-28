@@ -121,6 +121,14 @@ def MIPSXselectcc : SDNode<"MIPSXISD::SELECT_CC", SDT_MIPSXSelectCC>;
 def MIPSXbrindw : SDNode<"MIPSXISD::BRIND_W", SDTBrind,
                          [SDNPHasChain]>;
 
+// (mulsteps a, b << (32 - n), n): the low 32 bits of a * b, for a b that
+// fits in n bits (signed). Expanded by the AsmPrinter.
+def SDT_MIPSXMulSteps : SDTypeProfile<1, 3, [SDTCisVT<0, i32>,
+                                             SDTCisSameAs<0, 1>,
+                                             SDTCisSameAs<0, 2>,
+                                             SDTCisVT<3, i32>]>;
+def MIPSXmulsteps : SDNode<"MIPSXISD::MULSTEPS", SDT_MIPSXMulSteps>;
+
 // Address operands of loads and stores: (base register or frame index,
 // 17-bit offset).
 def AddrRegImm : ComplexPattern<iPTR, 2, "selectAddrRegImm", [frameindex], []>;
@@ -353,6 +361,15 @@ def SELECT : Pseudo<(outs GPR:$rd),
                     (ins GPR:$t, GPR:$f, GPR:$a, GPR:$b, i32imm:$cc),
                     [(set GPR:$rd, (MIPSXselectcc GPR:$t, GPR:$f, GPR:$a,
                                                   GPR:$b, timm:$cc))]>;
+
+// An inline multiplication (manual Appendix IV): movtos $md,md; nop (P4);
+// mstart $a,$rd; then $n - 1 times mstep $rd,$a,$rd. $md holds the
+// multiplier in its top $n bits. $rd must differ from $a, which every step
+// reads. A pseudo, so that the delay-slot filler cannot split it.
+let Defs = [MD], Constraints = "@earlyclobber $rd" in
+def MULSTEPS : Pseudo<(outs GPR:$rd), (ins GPR:$a, GPR:$md, i32imm:$n),
+                      [(set GPR:$rd, (MIPSXmulsteps GPR:$a, GPR:$md,
+                                                    timm:$n))]>;
 
 //===----------------------------------------------------------------------===//
 // Patterns

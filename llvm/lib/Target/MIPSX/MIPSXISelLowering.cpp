@@ -46,6 +46,11 @@ static cl::opt<unsigned> MulConstMaxInsts(
     cl::desc("Most instructions a multiplication by a constant may expand to "
              "before it calls __mulsi3 instead"));
 
+static cl::opt<unsigned> MulInlineMaxBits(
+    "mipsx-mul-inline-max-bits", cl::Hidden, cl::init(17),
+    cl::desc("Widest multiplier (in bits, signed) for which a multiplication "
+             "is done inline with mstep instead of calling __mulsi3"));
+
 MIPSXTargetLowering::MIPSXTargetLowering(const TargetMachine &TM,
                                          const MIPSXSubtarget &STI)
     : TargetLowering(TM, STI), Subtarget(STI) {
@@ -338,9 +343,34 @@ SDValue MIPSXTargetLowering::LowerUDIVREM(SDValue Op, SelectionDAG &DAG) const {
   return LowerCallTo(CLI).first;
 }
 
+// x * y where known bits show that one operand fits in n <= 17 bits
+// (signed): inline as MULSTEPS, mstart and n - 1 msteps with the multiplier
+// in the top n bits of MD. That is n + 3 cycles with the shift, against 14 to
+// 48 in __mulsi3 plus the call, and the caller need not save r31 for it.
+// It is n + 2 words against about four for the call, so not at -Oz.
+static SDValue combineMulSteps(SDNode *N, SelectionDAG &DAG) {
+  if (DAG.getMachineFunction().getFunction().hasMinSize())
+    return SDValue();
+  SDValue A = N->getOperand(0), B = N->getOperand(1);
+  unsigned BitsA = 33 - DAG.ComputeNumSignBits(A);
+  unsigned BitsB = 33 - DAG.ComputeNumSignBits(B);
+  if (BitsA < BitsB) {
+    std::swap(A, B);
+    std::swap(BitsA, BitsB);
+  }
+  if (BitsB > MulInlineMaxBits)
+    return SDValue();
+  SDLoc DL(N);
+  SDValue MD = DAG.getNode(ISD::SHL, DL, MVT::i32, B,
+                           DAG.getConstant(32 - BitsB, DL, MVT::i32));
+  return DAG.getNode(MIPSXISD::MULSTEPS, DL, MVT::i32, A, MD,
+                     DAG.getTargetConstant(BitsB, DL, MVT::i32));
+}
+
 // x * C as a sum of shifted copies of x, using the non-adjacent form of C
 // (digits -1, 0, 1, no two adjacent non-zero), if that takes few
-// instructions; otherwise leave it to __mulsi3.
+// instructions; otherwise mstep inline if an operand is narrow, otherwise
+// leave it to __mulsi3.
 SDValue MIPSXTargetLowering::PerformDAGCombine(SDNode *N,
                                                DAGCombinerInfo &DCI) const {
   if (N->getOpcode() != ISD::MUL || N->getValueType(0) != MVT::i32 ||
@@ -348,7 +378,7 @@ SDValue MIPSXTargetLowering::PerformDAGCombine(SDNode *N,
     return SDValue();
   auto *C = dyn_cast<ConstantSDNode>(N->getOperand(1));
   if (!C)
-    return SDValue();
+    return combineMulSteps(N, DCI.DAG);
   int64_t V = C->getSExtValue();
   if (V == 0 || V == 1 || isPowerOf2_64(V))
     return SDValue(); // The generic combines handle these.
@@ -371,7 +401,7 @@ SDValue MIPSXTargetLowering::PerformDAGCombine(SDNode *N,
     Insts += T.first != 0; // Shifts.
   Insts += Terms[0].second < 0; // Negation.
   if (Insts > MulConstMaxInsts)
-    return SDValue();
+    return combineMulSteps(N, DCI.DAG);
 
   SelectionDAG &DAG = DCI.DAG;
   SDLoc DL(N);

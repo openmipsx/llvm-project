@@ -166,6 +166,283 @@ exit:
   ret i32 %hj
 }
 
+define i32 @t32_mul_s1() noinline {
+entry:
+  br label %outer
+outer:
+  %i = phi i32 [ 0, %entry ], [ %i1, %outer.next ]
+  %h = phi i32 [ 0, %entry ], [ %hj, %outer.next ]
+  %pa = getelementptr [23 x i32], ptr @a32, i32 0, i32 %i
+  %x = load i32, ptr %pa
+  br label %inner
+inner:
+  %j = phi i32 [ 0, %outer ], [ %j1, %inner ]
+  %hh = phi i32 [ %h, %outer ], [ %h2, %inner ]
+  %pb = getelementptr [22 x i32], ptr @b32, i32 0, i32 %j
+  %y = load i32, ptr %pb
+  %ys = shl i32 %y, 31
+  %yn = ashr i32 %ys, 31
+  %v = mul i32 %x, %yn
+  %hs = shl i32 %hh, 1
+  %h2 = xor i32 %hs, %v
+  %j1 = add i32 %j, 1
+  %jm = icmp ult i32 %j1, 22
+  br i1 %jm, label %inner, label %outer.next
+outer.next:
+  %hj = phi i32 [ %h2, %inner ]
+  %i1 = add i32 %i, 1
+  %im = icmp ult i32 %i1, 23
+  br i1 %im, label %outer, label %exit
+exit:
+  ret i32 %hj
+}
+
+define i32 @t32_mul_s2() noinline {
+entry:
+  br label %outer
+outer:
+  %i = phi i32 [ 0, %entry ], [ %i1, %outer.next ]
+  %h = phi i32 [ 0, %entry ], [ %hj, %outer.next ]
+  %pa = getelementptr [23 x i32], ptr @a32, i32 0, i32 %i
+  %x = load i32, ptr %pa
+  br label %inner
+inner:
+  %j = phi i32 [ 0, %outer ], [ %j1, %inner ]
+  %hh = phi i32 [ %h, %outer ], [ %h2, %inner ]
+  %pb = getelementptr [22 x i32], ptr @b32, i32 0, i32 %j
+  %y = load i32, ptr %pb
+  %ys = shl i32 %y, 30
+  %yn = ashr i32 %ys, 30
+  %v = mul i32 %x, %yn
+  %hs = shl i32 %hh, 1
+  %h2 = xor i32 %hs, %v
+  %j1 = add i32 %j, 1
+  %jm = icmp ult i32 %j1, 22
+  br i1 %jm, label %inner, label %outer.next
+outer.next:
+  %hj = phi i32 [ %h2, %inner ]
+  %i1 = add i32 %i, 1
+  %im = icmp ult i32 %i1, 23
+  br i1 %im, label %outer, label %exit
+exit:
+  ret i32 %hj
+}
+
+define i32 @t32_mul_s8() noinline {
+entry:
+  br label %outer
+outer:
+  %i = phi i32 [ 0, %entry ], [ %i1, %outer.next ]
+  %h = phi i32 [ 0, %entry ], [ %hj, %outer.next ]
+  %pa = getelementptr [23 x i32], ptr @a32, i32 0, i32 %i
+  %x = load i32, ptr %pa
+  br label %inner
+inner:
+  %j = phi i32 [ 0, %outer ], [ %j1, %inner ]
+  %hh = phi i32 [ %h, %outer ], [ %h2, %inner ]
+  %pb = getelementptr [22 x i32], ptr @b32, i32 0, i32 %j
+  %y = load i32, ptr %pb
+  %ys = shl i32 %y, 24
+  %yn = ashr i32 %ys, 24
+  %v = mul i32 %x, %yn
+  %hs = shl i32 %hh, 1
+  %h2 = xor i32 %hs, %v
+  %j1 = add i32 %j, 1
+  %jm = icmp ult i32 %j1, 22
+  br i1 %jm, label %inner, label %outer.next
+outer.next:
+  %hj = phi i32 [ %h2, %inner ]
+  %i1 = add i32 %i, 1
+  %im = icmp ult i32 %i1, 23
+  br i1 %im, label %outer, label %exit
+exit:
+  ret i32 %hj
+}
+
+define i32 @t32_mul_s15() noinline {
+entry:
+  br label %outer
+outer:
+  %i = phi i32 [ 0, %entry ], [ %i1, %outer.next ]
+  %h = phi i32 [ 0, %entry ], [ %hj, %outer.next ]
+  %pa = getelementptr [23 x i32], ptr @a32, i32 0, i32 %i
+  %x = load i32, ptr %pa
+  br label %inner
+inner:
+  %j = phi i32 [ 0, %outer ], [ %j1, %inner ]
+  %hh = phi i32 [ %h, %outer ], [ %h2, %inner ]
+  %pb = getelementptr [22 x i32], ptr @b32, i32 0, i32 %j
+  %y = load i32, ptr %pb
+  %ys = shl i32 %y, 17
+  %yn = ashr i32 %ys, 17
+  %v = mul i32 %x, %yn
+  %hs = shl i32 %hh, 1
+  %h2 = xor i32 %hs, %v
+  %j1 = add i32 %j, 1
+  %jm = icmp ult i32 %j1, 22
+  br i1 %jm, label %inner, label %outer.next
+outer.next:
+  %hj = phi i32 [ %h2, %inner ]
+  %i1 = add i32 %i, 1
+  %im = icmp ult i32 %i1, 23
+  br i1 %im, label %outer, label %exit
+exit:
+  ret i32 %hj
+}
+
+define i32 @t32_mul_s16() noinline {
+entry:
+  br label %outer
+outer:
+  %i = phi i32 [ 0, %entry ], [ %i1, %outer.next ]
+  %h = phi i32 [ 0, %entry ], [ %hj, %outer.next ]
+  %pa = getelementptr [23 x i32], ptr @a32, i32 0, i32 %i
+  %x = load i32, ptr %pa
+  br label %inner
+inner:
+  %j = phi i32 [ 0, %outer ], [ %j1, %inner ]
+  %hh = phi i32 [ %h, %outer ], [ %h2, %inner ]
+  %pb = getelementptr [22 x i32], ptr @b32, i32 0, i32 %j
+  %y = load i32, ptr %pb
+  %ys = shl i32 %y, 16
+  %yn = ashr i32 %ys, 16
+  %v = mul i32 %x, %yn
+  %hs = shl i32 %hh, 1
+  %h2 = xor i32 %hs, %v
+  %j1 = add i32 %j, 1
+  %jm = icmp ult i32 %j1, 22
+  br i1 %jm, label %inner, label %outer.next
+outer.next:
+  %hj = phi i32 [ %h2, %inner ]
+  %i1 = add i32 %i, 1
+  %im = icmp ult i32 %i1, 23
+  br i1 %im, label %outer, label %exit
+exit:
+  ret i32 %hj
+}
+
+define i32 @t32_mul_s17() noinline {
+entry:
+  br label %outer
+outer:
+  %i = phi i32 [ 0, %entry ], [ %i1, %outer.next ]
+  %h = phi i32 [ 0, %entry ], [ %hj, %outer.next ]
+  %pa = getelementptr [23 x i32], ptr @a32, i32 0, i32 %i
+  %x = load i32, ptr %pa
+  br label %inner
+inner:
+  %j = phi i32 [ 0, %outer ], [ %j1, %inner ]
+  %hh = phi i32 [ %h, %outer ], [ %h2, %inner ]
+  %pb = getelementptr [22 x i32], ptr @b32, i32 0, i32 %j
+  %y = load i32, ptr %pb
+  %ys = shl i32 %y, 15
+  %yn = ashr i32 %ys, 15
+  %v = mul i32 %x, %yn
+  %hs = shl i32 %hh, 1
+  %h2 = xor i32 %hs, %v
+  %j1 = add i32 %j, 1
+  %jm = icmp ult i32 %j1, 22
+  br i1 %jm, label %inner, label %outer.next
+outer.next:
+  %hj = phi i32 [ %h2, %inner ]
+  %i1 = add i32 %i, 1
+  %im = icmp ult i32 %i1, 23
+  br i1 %im, label %outer, label %exit
+exit:
+  ret i32 %hj
+}
+
+define i32 @t32_mul_s18() noinline {
+entry:
+  br label %outer
+outer:
+  %i = phi i32 [ 0, %entry ], [ %i1, %outer.next ]
+  %h = phi i32 [ 0, %entry ], [ %hj, %outer.next ]
+  %pa = getelementptr [23 x i32], ptr @a32, i32 0, i32 %i
+  %x = load i32, ptr %pa
+  br label %inner
+inner:
+  %j = phi i32 [ 0, %outer ], [ %j1, %inner ]
+  %hh = phi i32 [ %h, %outer ], [ %h2, %inner ]
+  %pb = getelementptr [22 x i32], ptr @b32, i32 0, i32 %j
+  %y = load i32, ptr %pb
+  %ys = shl i32 %y, 14
+  %yn = ashr i32 %ys, 14
+  %v = mul i32 %x, %yn
+  %hs = shl i32 %hh, 1
+  %h2 = xor i32 %hs, %v
+  %j1 = add i32 %j, 1
+  %jm = icmp ult i32 %j1, 22
+  br i1 %jm, label %inner, label %outer.next
+outer.next:
+  %hj = phi i32 [ %h2, %inner ]
+  %i1 = add i32 %i, 1
+  %im = icmp ult i32 %i1, 23
+  br i1 %im, label %outer, label %exit
+exit:
+  ret i32 %hj
+}
+
+define i32 @t32_mul_u8() noinline {
+entry:
+  br label %outer
+outer:
+  %i = phi i32 [ 0, %entry ], [ %i1, %outer.next ]
+  %h = phi i32 [ 0, %entry ], [ %hj, %outer.next ]
+  %pa = getelementptr [23 x i32], ptr @a32, i32 0, i32 %i
+  %x = load i32, ptr %pa
+  br label %inner
+inner:
+  %j = phi i32 [ 0, %outer ], [ %j1, %inner ]
+  %hh = phi i32 [ %h, %outer ], [ %h2, %inner ]
+  %pb = getelementptr [22 x i32], ptr @b32, i32 0, i32 %j
+  %y = load i32, ptr %pb
+  %xn = and i32 %x, 255
+  %v = mul i32 %xn, %y
+  %hs = shl i32 %hh, 1
+  %h2 = xor i32 %hs, %v
+  %j1 = add i32 %j, 1
+  %jm = icmp ult i32 %j1, 22
+  br i1 %jm, label %inner, label %outer.next
+outer.next:
+  %hj = phi i32 [ %h2, %inner ]
+  %i1 = add i32 %i, 1
+  %im = icmp ult i32 %i1, 23
+  br i1 %im, label %outer, label %exit
+exit:
+  ret i32 %hj
+}
+
+define i32 @t32_mul_u16() noinline {
+entry:
+  br label %outer
+outer:
+  %i = phi i32 [ 0, %entry ], [ %i1, %outer.next ]
+  %h = phi i32 [ 0, %entry ], [ %hj, %outer.next ]
+  %pa = getelementptr [23 x i32], ptr @a32, i32 0, i32 %i
+  %x = load i32, ptr %pa
+  br label %inner
+inner:
+  %j = phi i32 [ 0, %outer ], [ %j1, %inner ]
+  %hh = phi i32 [ %h, %outer ], [ %h2, %inner ]
+  %pb = getelementptr [22 x i32], ptr @b32, i32 0, i32 %j
+  %y = load i32, ptr %pb
+  %xn = and i32 %x, 65535
+  %v = mul i32 %xn, %y
+  %hs = shl i32 %hh, 1
+  %h2 = xor i32 %hs, %v
+  %j1 = add i32 %j, 1
+  %jm = icmp ult i32 %j1, 22
+  br i1 %jm, label %inner, label %outer.next
+outer.next:
+  %hj = phi i32 [ %h2, %inner ]
+  %i1 = add i32 %i, 1
+  %im = icmp ult i32 %i1, 23
+  br i1 %im, label %outer, label %exit
+exit:
+  ret i32 %hj
+}
+
 define i32 @t32_udivrem() noinline {
 entry:
   br label %outer
@@ -959,107 +1236,161 @@ c5:
 f5:
   ret i32 5
 c6:
-  %r6 = call i32 @t32_udivrem()
-  %e6 = icmp ne i32 %r6, -2074991441
+  %r6 = call i32 @t32_mul_s1()
+  %e6 = icmp ne i32 %r6, -426277171
   br i1 %e6, label %f6, label %c7
 f6:
   ret i32 6
 c7:
-  %r7 = call i32 @t32_shl()
-  %e7 = icmp ne i32 %r7, -2104555648
+  %r7 = call i32 @t32_mul_s2()
+  %e7 = icmp ne i32 %r7, 1064323201
   br i1 %e7, label %f7, label %c8
 f7:
   ret i32 7
 c8:
-  %r8 = call i32 @t32_lshr()
-  %e8 = icmp ne i32 %r8, 738252374
+  %r8 = call i32 @t32_mul_s8()
+  %e8 = icmp ne i32 %r8, -877999471
   br i1 %e8, label %f8, label %c9
 f8:
   ret i32 8
 c9:
-  %r9 = call i32 @t32_ashr()
-  %e9 = icmp ne i32 %r9, 738252374
+  %r9 = call i32 @t32_mul_s15()
+  %e9 = icmp ne i32 %r9, -850106735
   br i1 %e9, label %f9, label %c10
 f9:
   ret i32 9
 c10:
-  %r10 = call i32 @t32_cmul()
-  %e10 = icmp ne i32 %r10, 1324442103
+  %r10 = call i32 @t32_mul_s16()
+  %e10 = icmp ne i32 %r10, 1834378897
   br i1 %e10, label %f10, label %c11
 f10:
   ret i32 10
 c11:
-  %r11 = call i32 @t32_cudiv()
-  %e11 = icmp ne i32 %r11, 520581977
+  %r11 = call i32 @t32_mul_s17()
+  %e11 = icmp ne i32 %r11, 1296197265
   br i1 %e11, label %f11, label %c12
 f11:
   ret i32 11
 c12:
-  %r12 = call i32 @t32_curem()
-  %e12 = icmp ne i32 %r12, -802964587
+  %r12 = call i32 @t32_mul_s18()
+  %e12 = icmp ne i32 %r12, 1297770129
   br i1 %e12, label %f12, label %c13
 f12:
   ret i32 12
 c13:
-  %r13 = call i32 @t32_csdiv()
-  %e13 = icmp ne i32 %r13, 1388241027
+  %r13 = call i32 @t32_mul_u8()
+  %e13 = icmp ne i32 %r13, 1260714385
   br i1 %e13, label %f13, label %c14
 f13:
   ret i32 13
 c14:
-  %r14 = call i32 @t32_csrem()
-  %e14 = icmp ne i32 %r14, 151615613
+  %r14 = call i32 @t32_mul_u16()
+  %e14 = icmp ne i32 %r14, -591042927
   br i1 %e14, label %f14, label %c15
 f14:
   ret i32 14
 c15:
-  %r15 = call i32 @t64_mul()
-  %e15 = icmp ne i32 %r15, -2105297974
+  %r15 = call i32 @t32_udivrem()
+  %e15 = icmp ne i32 %r15, -2074991441
   br i1 %e15, label %f15, label %c16
 f15:
   ret i32 15
 c16:
-  %r16 = call i32 @t64_udiv()
-  %e16 = icmp ne i32 %r16, 503517251
+  %r16 = call i32 @t32_shl()
+  %e16 = icmp ne i32 %r16, -2104555648
   br i1 %e16, label %f16, label %c17
 f16:
   ret i32 16
 c17:
-  %r17 = call i32 @t64_urem()
-  %e17 = icmp ne i32 %r17, 368902241
+  %r17 = call i32 @t32_lshr()
+  %e17 = icmp ne i32 %r17, 738252374
   br i1 %e17, label %f17, label %c18
 f17:
   ret i32 17
 c18:
-  %r18 = call i32 @t64_sdiv()
-  %e18 = icmp ne i32 %r18, 1040257107
+  %r18 = call i32 @t32_ashr()
+  %e18 = icmp ne i32 %r18, 738252374
   br i1 %e18, label %f18, label %c19
 f18:
   ret i32 18
 c19:
-  %r19 = call i32 @t64_srem()
-  %e19 = icmp ne i32 %r19, 1710621441
+  %r19 = call i32 @t32_cmul()
+  %e19 = icmp ne i32 %r19, 1324442103
   br i1 %e19, label %f19, label %c20
 f19:
   ret i32 19
 c20:
-  %r20 = call i32 @t64_shl()
-  %e20 = icmp ne i32 %r20, 414897153
+  %r20 = call i32 @t32_cudiv()
+  %e20 = icmp ne i32 %r20, 520581977
   br i1 %e20, label %f20, label %c21
 f20:
   ret i32 20
 c21:
-  %r21 = call i32 @t64_lshr()
-  %e21 = icmp ne i32 %r21, 1103324160
+  %r21 = call i32 @t32_curem()
+  %e21 = icmp ne i32 %r21, -802964587
   br i1 %e21, label %f21, label %c22
 f21:
   ret i32 21
 c22:
-  %r22 = call i32 @t64_ashr()
-  %e22 = icmp ne i32 %r22, 1103324160
-  br i1 %e22, label %f22, label %pass
+  %r22 = call i32 @t32_csdiv()
+  %e22 = icmp ne i32 %r22, 1388241027
+  br i1 %e22, label %f22, label %c23
 f22:
   ret i32 22
+c23:
+  %r23 = call i32 @t32_csrem()
+  %e23 = icmp ne i32 %r23, 151615613
+  br i1 %e23, label %f23, label %c24
+f23:
+  ret i32 23
+c24:
+  %r24 = call i32 @t64_mul()
+  %e24 = icmp ne i32 %r24, -2105297974
+  br i1 %e24, label %f24, label %c25
+f24:
+  ret i32 24
+c25:
+  %r25 = call i32 @t64_udiv()
+  %e25 = icmp ne i32 %r25, 503517251
+  br i1 %e25, label %f25, label %c26
+f25:
+  ret i32 25
+c26:
+  %r26 = call i32 @t64_urem()
+  %e26 = icmp ne i32 %r26, 368902241
+  br i1 %e26, label %f26, label %c27
+f26:
+  ret i32 26
+c27:
+  %r27 = call i32 @t64_sdiv()
+  %e27 = icmp ne i32 %r27, 1040257107
+  br i1 %e27, label %f27, label %c28
+f27:
+  ret i32 27
+c28:
+  %r28 = call i32 @t64_srem()
+  %e28 = icmp ne i32 %r28, 1710621441
+  br i1 %e28, label %f28, label %c29
+f28:
+  ret i32 28
+c29:
+  %r29 = call i32 @t64_shl()
+  %e29 = icmp ne i32 %r29, 414897153
+  br i1 %e29, label %f29, label %c30
+f29:
+  ret i32 29
+c30:
+  %r30 = call i32 @t64_lshr()
+  %e30 = icmp ne i32 %r30, 1103324160
+  br i1 %e30, label %f30, label %c31
+f30:
+  ret i32 30
+c31:
+  %r31 = call i32 @t64_ashr()
+  %e31 = icmp ne i32 %r31, 1103324160
+  br i1 %e31, label %f31, label %pass
+f31:
+  ret i32 31
 pass:
   ret i32 0
 }
