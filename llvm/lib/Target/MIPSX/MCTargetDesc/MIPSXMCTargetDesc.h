@@ -13,14 +13,17 @@
 #include "llvm/MC/MCTargetOptions.h"
 #include <cstdint>
 #include <memory>
+#include <optional>
 
 namespace llvm {
 class MCAsmBackend;
+class MCCFIInstruction;
 class MCCodeEmitter;
 class MCContext;
 class MCInstrInfo;
 class MCObjectTargetWriter;
 class MCSubtargetInfo;
+class MCSymbol;
 class Target;
 
 MCCodeEmitter *createMIPSXMCCodeEmitter(const MCInstrInfo &MCII,
@@ -39,6 +42,14 @@ inline unsigned encodeShiftAmount(unsigned N) {
   unsigned E = (32 - N) & 31;
   return ((E >> 2) << 4) | (1u << (E & 3));
 }
+
+/// The return address column (DWARF 31, r31) holds a byte address, but r31
+/// and its stack slot hold a word address (docs/abi.md section 2.4), so its
+/// rule is a DW_CFA_val_expression that multiplies by 4. With no CFAOffset,
+/// the return address is in r31 (the CIE's initial rule); otherwise its word
+/// is saved at CFA + CFAOffset, which is negative.
+MCCFIInstruction createReturnAddressCFI(MCSymbol *L,
+                                        std::optional<int64_t> CFAOffset);
 } // namespace MIPSX
 
 } // namespace llvm
