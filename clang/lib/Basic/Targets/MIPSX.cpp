@@ -31,6 +31,9 @@ MIPSXTargetInfo::MIPSXTargetInfo(const llvm::Triple &Triple,
   LongDoubleAlign = 64;
   LongDoubleFormat = &llvm::APFloat::IEEEdouble();
   SuitableAlign = 64;
+  // __attribute__((aligned)) gives the stack's alignment, which is what
+  // alloca and malloc guarantee (abi.md section 8).
+  DefaultAlignForAttributeAligned = 64;
   // abi.md section 13.6: no atomic instructions, so every atomic operation
   // is a call into the SDK.
   MaxAtomicPromoteWidth = 64;
