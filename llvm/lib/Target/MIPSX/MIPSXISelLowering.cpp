@@ -26,7 +26,9 @@
 #include "llvm/CodeGen/MachineJumpTableInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/SelectionDAG.h"
+#include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/Support/ErrorHandling.h"
 
@@ -36,6 +38,11 @@ using namespace llvm;
 
 #define GET_CALLING_CONV_IMPL
 #include "MIPSXGenCallingConv.inc"
+
+static cl::opt<unsigned> MulConstMaxInsts(
+    "mipsx-mul-const-max-insts", cl::Hidden, cl::init(6),
+    cl::desc("Most instructions a multiplication by a constant may expand to "
+             "before it calls __mulsi3 instead"));
 
 MIPSXTargetLowering::MIPSXTargetLowering(const TargetMachine &TM,
                                          const MIPSXSubtarget &STI)
@@ -85,8 +92,14 @@ MIPSXTargetLowering::MIPSXTargetLowering(const TargetMachine &TM,
   for (unsigned Op : {ISD::MUL, ISD::SDIV, ISD::UDIV, ISD::SREM, ISD::UREM})
     setOperationAction(Op, MVT::i32, LibCall);
   for (unsigned Op : {ISD::MULHS, ISD::MULHU, ISD::SMUL_LOHI, ISD::UMUL_LOHI,
-                      ISD::SDIVREM, ISD::UDIVREM})
+                      ISD::SDIVREM})
     setOperationAction(Op, MVT::i32, Expand);
+  // __udivsi3 also leaves the remainder in r3 (mipsx-sdk
+  // rt/builtins/README.md), so a quotient and remainder are one call.
+  setOperationAction(ISD::UDIVREM, MVT::i32, Custom);
+  // Multiplication by a constant becomes shifts and adds where that is
+  // short.
+  setTargetDAGCombine(ISD::MUL);
 
   for (unsigned Op : {ISD::ROTL, ISD::ROTR, ISD::BSWAP, ISD::CTPOP, ISD::CTLZ,
                       ISD::CTTZ, ISD::SHL_PARTS, ISD::SRA_PARTS,
@@ -122,6 +135,8 @@ SDValue MIPSXTargetLowering::LowerOperation(SDValue Op,
     return LowerVASTART(Op, DAG);
   case ISD::VAARG:
     return LowerVAARG(Op, DAG);
+  case ISD::UDIVREM:
+    return LowerUDIVREM(Op, DAG);
   case ISD::SHL:
   case ISD::SRL:
   case ISD::SRA:
@@ -231,6 +246,77 @@ SDValue MIPSXTargetLowering::LowerVAARG(SDValue Op, SelectionDAG &DAG) const {
   Chain = DAG.getStore(Ap.getValue(1), DL, Next, ListPtr,
                        MachinePointerInfo(SV));
   return DAG.getLoad(VT, DL, Chain, Ap, MachinePointerInfo());
+}
+
+// One call to __udivsi3, which returns the quotient in r2 and the remainder
+// in r3: the same registers as a returned { i32, i32 }.
+SDValue MIPSXTargetLowering::LowerUDIVREM(SDValue Op, SelectionDAG &DAG) const {
+  SDLoc DL(Op);
+  LLVMContext &Ctx = *DAG.getContext();
+  Type *I32 = Type::getInt32Ty(Ctx);
+  ArgListTy Args;
+  Args.emplace_back(Op.getOperand(0), I32);
+  Args.emplace_back(Op.getOperand(1), I32);
+  CallLoweringInfo CLI(DAG);
+  CLI.setDebugLoc(DL)
+      .setChain(DAG.getEntryNode())
+      .setLibCallee(CallingConv::C, StructType::get(Ctx, {I32, I32}),
+                    DAG.getExternalSymbol("__udivsi3", MVT::i32),
+                    std::move(Args));
+  return LowerCallTo(CLI).first;
+}
+
+// x * C as a sum of shifted copies of x, using the non-adjacent form of C
+// (digits -1, 0, 1, no two adjacent non-zero), if that takes few
+// instructions; otherwise leave it to __mulsi3.
+SDValue MIPSXTargetLowering::PerformDAGCombine(SDNode *N,
+                                               DAGCombinerInfo &DCI) const {
+  if (N->getOpcode() != ISD::MUL || N->getValueType(0) != MVT::i32 ||
+      !DCI.isBeforeLegalizeOps())
+    return SDValue();
+  auto *C = dyn_cast<ConstantSDNode>(N->getOperand(1));
+  if (!C)
+    return SDValue();
+  int64_t V = C->getSExtValue();
+  if (V == 0 || V == 1 || isPowerOf2_64(V))
+    return SDValue(); // The generic combines handle these.
+
+  // Non-adjacent form, modulo 2^32.
+  SmallVector<std::pair<unsigned, int>, 8> Terms;
+  for (int64_t R = V, K = 0; R != 0 && K < 32; R >>= 1, ++K) {
+    if (R & 1) {
+      int D = (R & 3) == 1 ? 1 : -1;
+      R -= D;
+      Terms.push_back({unsigned(K), D});
+    }
+  }
+  // Put a positive term first, so that no negation is needed.
+  auto Pos = llvm::find_if(Terms, [](auto &T) { return T.second > 0; });
+  if (Pos != Terms.end())
+    std::swap(*Pos, Terms[0]);
+  unsigned Insts = Terms.size() - 1; // Adds and subtracts.
+  for (auto &T : Terms)
+    Insts += T.first != 0; // Shifts.
+  Insts += Terms[0].second < 0; // Negation.
+  if (Insts > MulConstMaxInsts)
+    return SDValue();
+
+  SelectionDAG &DAG = DCI.DAG;
+  SDLoc DL(N);
+  SDValue X = N->getOperand(0);
+  auto Shifted = [&](unsigned K) {
+    return K == 0 ? X
+                  : DAG.getNode(ISD::SHL, DL, MVT::i32, X,
+                                DAG.getConstant(K, DL, MVT::i32));
+  };
+  SDValue Res = Shifted(Terms[0].first);
+  if (Terms[0].second < 0)
+    Res = DAG.getNode(ISD::SUB, DL, MVT::i32, DAG.getConstant(0, DL, MVT::i32),
+                      Res);
+  for (auto &T : drop_begin(Terms))
+    Res = DAG.getNode(T.second > 0 ? ISD::ADD : ISD::SUB, DL, MVT::i32, Res,
+                      Shifted(T.first));
+  return Res;
 }
 
 unsigned MIPSXTargetLowering::getJumpTableEncoding() const {
