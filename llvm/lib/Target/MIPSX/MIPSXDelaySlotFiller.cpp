@@ -311,14 +311,29 @@ unsigned MIPSXDelaySlotFiller::fillFromTarget(MachineBasicBlock &MBB,
   }
 
   // The branch block now goes to Rest (Br may itself be in Rest if it
-  // branched to its own block).
+  // branched to its own block). It still goes to Target if another branch
+  // in it (a conditional branch and an unconditional one can share a
+  // target) or its fall-through does.
   MachineBasicBlock &BrMBB = *Br.getParent();
-  if (BrMBB.isSuccessor(Rest))
-    BrMBB.removeSuccessor(Target);
-  else if (BrMBB.isSuccessor(Target))
-    BrMBB.replaceSuccessor(Target, Rest);
   Dst.setMBB(Rest);
   Br.setDesc(TII->get(SqOpc));
+  bool StillToTarget = false;
+  for (MachineInstr &MI : BrMBB.instrs())
+    for (const MachineOperand &MO : MI.operands())
+      if (MO.isMBB() && MO.getMBB() == Target)
+        StillToTarget = true;
+  MachineBasicBlock::iterator Last = BrMBB.getLastNonDebugInstr();
+  if (BrMBB.getNextNode() == Target &&
+      (Last == BrMBB.end() || !Last->isBarrier()))
+    StillToTarget = true;
+  if (BrMBB.isSuccessor(Target) && !StillToTarget) {
+    if (BrMBB.isSuccessor(Rest))
+      BrMBB.removeSuccessor(Target);
+    else
+      BrMBB.replaceSuccessor(Target, Rest);
+  }
+  if (!BrMBB.isSuccessor(Rest))
+    BrMBB.addSuccessor(Rest);
 
   MachineBasicBlock::instr_iterator After = std::next(Br.getIterator());
   for (MachineInstr *MI : Copy) {
