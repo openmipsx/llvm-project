@@ -167,6 +167,42 @@ static void addBranchRegs(RegSets &Sets, const MachineInstr &Br) {
     Sets.Uses.insert(MIPSX::R31);
 }
 
+// Keeps register liveness right for the verifier once the slots are bundled
+// after Br. Within a bundle, a read of a register set by an earlier member is
+// an internal read. The slots execute before the callee, return address or
+// branch target does, so the branch's implicit reads of registers a slot sets
+// (a call's arguments, a return's result) are internal reads too. And a
+// register that Br or a slot kills is not dead there if a later slot reads
+// it.
+static void fixSlotLiveness(MachineInstr &Br, const TargetRegisterInfo *TRI) {
+  SmallVector<MachineInstr *, 2> Slots;
+  for (auto I = std::next(Br.getIterator()), E = Br.getParent()->instr_end();
+       I != E && I->isBundledWithPred(); ++I)
+    Slots.push_back(&*I);
+  for (unsigned N = 0; N != Slots.size(); ++N) {
+    MachineInstr &Slot = *Slots[N];
+    for (MachineOperand &MO : Br.operands()) {
+      if (!MO.isReg() || !MO.isUse() || !MO.getReg())
+        continue;
+      if (MO.isImplicit() && Slot.modifiesRegister(MO.getReg(), TRI))
+        MO.setIsInternalRead();
+      else if (MO.isKill() && Slot.readsRegister(MO.getReg(), TRI))
+        MO.setIsKill(false);
+    }
+    if (N == 0)
+      continue;
+    MachineInstr &Prev = *Slots[N - 1];
+    for (MachineOperand &MO : Slot.operands()) {
+      if (!MO.isReg() || !MO.isUse() || !MO.getReg())
+        continue;
+      if (Prev.modifiesRegister(MO.getReg(), TRI))
+        MO.setIsInternalRead();
+      else if (MO.readsReg())
+        Prev.clearRegisterKills(MO.getReg(), TRI);
+    }
+  }
+}
+
 // Returns the number of slots filled (or, with DryRun, that would be).
 unsigned MIPSXDelaySlotFiller::fillFromAbove(MachineBasicBlock &MBB,
                                              MachineInstr &Br, bool DryRun) {
@@ -222,6 +258,13 @@ unsigned MIPSXDelaySlotFiller::fillFromAbove(MachineBasicBlock &MBB,
     return Picked.size();
   // A single instruction goes in the first slot; with two, the earlier one
   // goes first. Either way a lone load is fine (the second slot is a nop).
+  // An instruction moved down now reads its registers after the ones it
+  // moved past (and the branch), so their kill flags go.
+  for (MachineInstr *MI : Picked)
+    for (const MachineOperand &Use : MI->uses())
+      if (Use.isReg() && Use.getReg() && Use.readsReg())
+        for (auto I = std::next(MI->getIterator()); &*I != &Br; ++I)
+          I->clearRegisterKills(Use.getReg(), TRI);
   MachineBasicBlock::instr_iterator After = std::next(Br.getIterator());
   for (MachineInstr *MI : reverse(Picked)) {
     MI->removeFromParent();
@@ -229,6 +272,7 @@ unsigned MIPSXDelaySlotFiller::fillFromAbove(MachineBasicBlock &MBB,
     MI->bundleWithPred();
     ++NumFilledAbove;
   }
+  fixSlotLiveness(Br, TRI);
   return Picked.size();
 }
 
@@ -338,10 +382,15 @@ unsigned MIPSXDelaySlotFiller::fillFromTarget(MachineBasicBlock &MBB,
   MachineBasicBlock::instr_iterator After = std::next(Br.getIterator());
   for (MachineInstr *MI : Copy) {
     MachineInstr *Dup = MF.CloneMachineInstr(MI);
+    // The copies' registers may still be needed on the fall-through path.
+    for (MachineOperand &MO : Dup->operands())
+      if (MO.isReg() && MO.isUse())
+        MO.setIsKill(false);
     BrMBB.insert(After, Dup);
     Dup->bundleWithPred();
     ++NumFilledTarget;
   }
+  fixSlotLiveness(Br, TRI);
   return Copy.size();
 }
 
