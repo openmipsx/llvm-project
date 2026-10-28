@@ -2660,6 +2660,17 @@ def LanaiSystemLibrary
 }
 
 //===----------------------------------------------------------------------===//
+// MIPS-X Runtime Libcalls
+//===----------------------------------------------------------------------===//
+
+def isMIPSX : RuntimeLibcallPredicate<"TT.getArch() == Triple::mipsx">;
+
+// The default names (__mulsi3, __divsi3, ...); the MIPS-X SDK provides them.
+def MIPSXSystemLibrary
+    : SystemRuntimeLibrary<isMIPSX, (add DefaultLibcallImpls32,
+                                         __stack_chk_fail, __stack_chk_guard)>;
+
+//===----------------------------------------------------------------------===//
 // Mips16 Runtime Libcalls
 //===----------------------------------------------------------------------===//
 
