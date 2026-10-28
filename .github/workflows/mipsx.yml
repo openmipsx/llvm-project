@@ -1,0 +1,168 @@
+# CI for the MIPSX fork (branch mipsx): build Clang and lld with only the
+# experimental MIPSX target, build the mipsx-sdk simulator and run-time,
+# and run the MIPSX lit tests, including the execution tests on the
+# simulator.  See .github/MIPSX.md.
+#
+# Repository variables (optional):
+#   MIPSX_SDK_REPO   owner/name of mipsx-sdk (default <owner>/mipsx-sdk)
+#   MIPSX_SDK_REF    its branch (default main)
+#   PICOLIBC_REPO    owner/name of the picolibc fork (default <owner>/picolibc)
+#   PICOLIBC_REF     its branch (default mipsx)
+
+name: MIPSX
+
+on:
+  push:
+    branches:
+      - mipsx
+  pull_request:
+    branches:
+      - mipsx
+  workflow_dispatch:
+    inputs:
+      full-check:
+        description: 'Also run check-llvm, check-clang and check-lld'
+        type: boolean
+        default: false
+      execution-suites:
+        description: 'Also run the builtins and GCC torture suites on the simulator'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  MIPSX_SDK_REPO: ${{ vars.MIPSX_SDK_REPO || format('{0}/mipsx-sdk', github.repository_owner) }}
+  MIPSX_SDK_REF: ${{ vars.MIPSX_SDK_REF || 'main' }}
+  PICOLIBC_REPO: ${{ vars.PICOLIBC_REPO || format('{0}/picolibc', github.repository_owner) }}
+  PICOLIBC_REF: ${{ vars.PICOLIBC_REF || 'mipsx' }}
+  CCACHE_DIR: ${{ github.workspace }}/.ccache
+  CCACHE_MAXSIZE: 2G
+  CCACHE_COMPRESS: 'true'
+
+jobs:
+  build-and-test:
+    name: Build and test (Linux x86-64)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 340
+    steps:
+      - name: Check out llvm-project
+        uses: actions/checkout@v4
+        with:
+          path: llvm-project
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Check out mipsx-sdk
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.MIPSX_SDK_REPO }}
+          ref: ${{ env.MIPSX_SDK_REF }}
+          path: mipsx-sdk
+          persist-credentials: false
+
+      - name: Check out picolibc
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.PICOLIBC_REPO }}
+          ref: ${{ env.PICOLIBC_REF }}
+          path: picolibc
+          persist-credentials: false
+
+      - name: Install packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build ccache clang lld meson
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-mipsx-${{ runner.os }}-${{ github.sha }}
+          restore-keys: ccache-mipsx-${{ runner.os }}-
+
+      - name: Configure
+        run: |
+          cmake -G Ninja -S llvm-project/llvm -B build \
+            -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_ASSERTIONS=ON \
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+            -DLLVM_USE_LINKER=lld -DLLVM_CCACHE_BUILD=ON \
+            -DLLVM_TARGETS_TO_BUILD="" \
+            -DLLVM_EXPERIMENTAL_TARGETS_TO_BUILD=MIPSX \
+            -DLLVM_ENABLE_PROJECTS="clang;lld" \
+            -DLLVM_LIT_ARGS="-sv"
+
+      - name: Build
+        run: |
+          ninja -C build
+          ccache --show-stats
+
+      - name: Build the simulator and SDK tests
+        run: make -C mipsx-sdk check
+
+      - name: Build the sysroot (run-time, compiler-rt builtins, picolibc)
+        run: |
+          make -C mipsx-sdk libc MIPSX_LLVM_BIN="$PWD/build/bin" \
+            PICOLIBC_SRC="$PWD/picolibc"
+          make -C mipsx-sdk check-llvm MIPSX_LLVM_BIN="$PWD/build/bin"
+
+      - name: MIPSX lit tests
+        working-directory: llvm-project
+        run: |
+          ../build/bin/llvm-lit -sv \
+            llvm/test/MC/MIPSX \
+            llvm/test/MC/Disassembler/MIPSX \
+            llvm/test/CodeGen/MIPSX \
+            clang/test/CodeGen/MIPSX \
+            clang/test/Driver/mipsx-toolchain.c \
+            clang/test/Preprocessor/init-mipsx.c \
+            clang/test/Sema/inline-asm-validate-mipsx.c \
+            lld/test/ELF/emulation-mipsx.s \
+            lld/test/ELF/mipsx-*.s
+
+      # The execution tests are silently unsupported when the SDK is
+      # missing; make sure they really ran.
+      - name: MIPSX execution tests on the simulator
+        working-directory: llvm-project
+        env:
+          MIPSX_SDK: ${{ github.workspace }}/mipsx-sdk
+        run: |
+          ../build/bin/llvm-lit -sv llvm/test/CodeGen/MIPSX/sim \
+            clang/test/CodeGen/MIPSX/sim | tee "$RUNNER_TEMP/sim.log"
+          if grep -q 'Unsupported' "$RUNNER_TEMP/sim.log"; then
+            echo "::error::MIPSX simulator tests were unsupported"
+            exit 1
+          fi
+
+      - name: Triple unit tests
+        run: |
+          ninja -C build TargetParserTests
+          build/unittests/TargetParser/TargetParserTests --gtest_filter='TripleTest.*'
+
+      - name: Full check-llvm, check-clang, check-lld
+        if: inputs.full-check
+        run: ninja -C build check-llvm check-clang check-lld
+
+      - name: Builtins and GCC torture suites on the simulator
+        if: inputs.execution-suites
+        run: |
+          git clone --filter=blob:none --depth 1 \
+            https://github.com/llvm/llvm-test-suite llvm-test-suite
+          cd mipsx-sdk
+          python3 tests/run_tests.py builtins --llvm-bin ../build/bin \
+            --results build/builtins.tsv -v
+          python3 tests/run_tests.py torture --llvm-bin ../build/bin \
+            --src ../llvm-test-suite/SingleSource/Regression/C/gcc-c-torture/execute \
+            --results build/torture.tsv -v
+          # run_tests.py reports but does not fail.
+          if awk -F'\t' '$3 != "PASS" && $3 != "UNSUPPORTED" {bad = 1} END {exit !bad}' \
+              build/builtins.tsv build/torture.tsv; then
+            echo "::error::execution tests failed"
+            exit 1
+          fi
