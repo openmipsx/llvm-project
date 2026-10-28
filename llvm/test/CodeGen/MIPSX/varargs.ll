@@ -13,6 +13,7 @@ define i32 @first(i32 %n, ...) {
 ; CHECK-LABEL: first:
 ; CHECK:       ; %bb.0:
 ; CHECK-NEXT:    addi r29,#-8,r29
+; CHECK-NEXT:    .cfi_def_cfa_offset 8
 ; CHECK-NEXT:    addi r0,#4,r3
 ; CHECK-NEXT:    addi r29,#8,r4
 ; CHECK-NEXT:    ld 8[r29],r2
@@ -32,6 +33,7 @@ define i64 @second64(i32 %n, ...) {
 ; CHECK-LABEL: second64:
 ; CHECK:       ; %bb.0:
 ; CHECK-NEXT:    addi r29,#-8,r29
+; CHECK-NEXT:    .cfi_def_cfa_offset 8
 ; CHECK-NEXT:    addi r29,#8,r2
 ; CHECK-NEXT:    ld 16[r29],r3
 ; CHECK-NEXT:    addi r2,#12,r2
@@ -52,6 +54,7 @@ define ptr @after_named(i32 %a1, i32 %a2, i32 %a3, i32 %a4, i32 %a5, i32 %a6,
 ; CHECK-LABEL: after_named:
 ; CHECK:       ; %bb.0:
 ; CHECK-NEXT:    addi r29,#-8,r29
+; CHECK-NEXT:    .cfi_def_cfa_offset 8
 ; CHECK-NEXT:    addi r29,#12,r2
 ; CHECK-NEXT:    ret
 ; CHECK-NEXT:    st 4[r29],r2
@@ -70,8 +73,10 @@ define i32 @caller() {
 ; CHECK-LABEL: caller:
 ; CHECK:       ; %bb.0:
 ; CHECK-NEXT:    addi r29,#-16,r29
+; CHECK-NEXT:    .cfi_def_cfa_offset 16
 ; CHECK-NEXT:    addi r0,#3,r2
 ; CHECK-NEXT:    st 12[r29],r31 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_escape 0x16, 0x1f, 0x05, 0x34, 0x1c, 0x06, 0x32, 0x24 ; r31 = [CFA-4] * 4
 ; CHECK-NEXT:    addi r0,#1,r4
 ; CHECK-NEXT:    st 8[r29],r2
 ; CHECK-NEXT:    addi r0,#2,r2

@@ -74,6 +74,7 @@ define i32 @stack(i32 %v) {
 ; CHECK-LABEL: stack:
 ; CHECK:       ; %bb.0:
 ; CHECK-NEXT:    addi r29,#-16,r29
+; CHECK-NEXT:    .cfi_def_cfa_offset 16
 ; CHECK-NEXT:    ;APP
 ; CHECK-NEXT:    st 8[r29],r4
 ; CHECK-NEXT:    ;NO_APP
@@ -91,7 +92,9 @@ define i32 @named(i32 %a) {
 ; CHECK-LABEL: named:
 ; CHECK:       ; %bb.0:
 ; CHECK-NEXT:    addi r29,#-8,r29
+; CHECK-NEXT:    .cfi_def_cfa_offset 8
 ; CHECK-NEXT:    st 4[r29],r16 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_offset r16, -4
 ; CHECK-NEXT:    mov r4,r12
 ; CHECK-NEXT:    ;APP
 ; CHECK-NEXT:    mov r12,r16
@@ -108,8 +111,11 @@ define i32 @clobber(i32 %a) {
 ; CHECK-LABEL: clobber:
 ; CHECK:       ; %bb.0:
 ; CHECK-NEXT:    addi r29,#-8,r29
+; CHECK-NEXT:    .cfi_def_cfa_offset 8
 ; CHECK-NEXT:    st 4[r29],r16 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_offset r16, -4
 ; CHECK-NEXT:    st 0[r29],r17 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_offset r17, -8
 ; CHECK-NEXT:    ;APP
 ; CHECK-NEXT:    ;NO_APP
 ; CHECK-NEXT:    mov r4,r2

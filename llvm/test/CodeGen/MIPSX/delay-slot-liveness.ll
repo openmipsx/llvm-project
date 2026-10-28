@@ -14,7 +14,9 @@ define i32 @call_args() {
 ; CHECK-LABEL: call_args:
 ; CHECK:       ; %bb.0:
 ; CHECK-NEXT:    addi r29,#-8,r29
+; CHECK-NEXT:    .cfi_def_cfa_offset 8
 ; CHECK-NEXT:    st 4[r29],r31 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_escape 0x16, 0x1f, 0x05, 0x34, 0x1c, 0x06, 0x32, 0x24 ; r31 = [CFA-4] * 4
 ; CHECK-NEXT:    jspci r0,#%call(h),r31
 ; CHECK-NEXT:    addi r0,#1,r4
 ; CHECK-NEXT:    addi r0,#2,r5

@@ -65,7 +65,9 @@ define void @call_slots(i32 %x) {
 ; CHECK-LABEL: call_slots:
 ; CHECK:       ; %bb.0:
 ; CHECK-NEXT:    addi r29,#-8,r29
+; CHECK-NEXT:    .cfi_def_cfa_offset 8
 ; CHECK-NEXT:    st 4[r29],r31 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_escape 0x16, 0x1f, 0x05, 0x34, 0x1c, 0x06, 0x32, 0x24 ; r31 = [CFA-4] * 4
 ; CHECK-NEXT:    jspci r0,#%call(f),r31
 ; CHECK-NEXT:    mov r4,r5
 ; CHECK-NEXT:    addi r0,#1,r4
@@ -78,9 +80,11 @@ define void @call_slots(i32 %x) {
 ; NOFILL-LABEL: call_slots:
 ; NOFILL:       ; %bb.0:
 ; NOFILL-NEXT:    addi r29,#-8,r29
+; NOFILL-NEXT:    .cfi_def_cfa_offset 8
 ; NOFILL-NEXT:    mov r4,r5
 ; NOFILL-NEXT:    addi r0,#1,r4
 ; NOFILL-NEXT:    st 4[r29],r31 ; 4-byte Folded Spill
+; NOFILL-NEXT:    .cfi_escape 0x16, 0x1f, 0x05, 0x34, 0x1c, 0x06, 0x32, 0x24 ; r31 = [CFA-4] * 4
 ; NOFILL-NEXT:    jspci r0,#%call(f),r31
 ; NOFILL-NEXT:    nop
 ; NOFILL-NEXT:    nop
@@ -98,7 +102,9 @@ define void @ret_slots() {
 ; CHECK-LABEL: ret_slots:
 ; CHECK:       ; %bb.0:
 ; CHECK-NEXT:    addi r29,#-8,r29
+; CHECK-NEXT:    .cfi_def_cfa_offset 8
 ; CHECK-NEXT:    st 4[r29],r31 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_escape 0x16, 0x1f, 0x05, 0x34, 0x1c, 0x06, 0x32, 0x24 ; r31 = [CFA-4] * 4
 ; CHECK-NEXT:    jspci r0,#%call(f),r31
 ; CHECK-NEXT:    addi r0,#1,r4
 ; CHECK-NEXT:    addi r0,#2,r5
@@ -111,9 +117,11 @@ define void @ret_slots() {
 ; NOFILL-LABEL: ret_slots:
 ; NOFILL:       ; %bb.0:
 ; NOFILL-NEXT:    addi r29,#-8,r29
+; NOFILL-NEXT:    .cfi_def_cfa_offset 8
 ; NOFILL-NEXT:    addi r0,#1,r4
 ; NOFILL-NEXT:    addi r0,#2,r5
 ; NOFILL-NEXT:    st 4[r29],r31 ; 4-byte Folded Spill
+; NOFILL-NEXT:    .cfi_escape 0x16, 0x1f, 0x05, 0x34, 0x1c, 0x06, 0x32, 0x24 ; r31 = [CFA-4] * 4
 ; NOFILL-NEXT:    jspci r0,#%call(f),r31
 ; NOFILL-NEXT:    nop
 ; NOFILL-NEXT:    nop

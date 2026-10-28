@@ -50,7 +50,9 @@ define i64 @mul64(i64 %a, i64 %b) {
 ; CHECK-LABEL: mul64:
 ; CHECK:       ; %bb.0:
 ; CHECK-NEXT:    addi r29,#-8,r29
+; CHECK-NEXT:    .cfi_def_cfa_offset 8
 ; CHECK-NEXT:    st 4[r29],r31 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_escape 0x16, 0x1f, 0x05, 0x34, 0x1c, 0x06, 0x32, 0x24 ; r31 = [CFA-4] * 4
 ; CHECK-NEXT:    jspci r0,#%call(__muldi3),r31
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    nop
@@ -67,7 +69,9 @@ define i64 @sdiv64(i64 %a, i64 %b) {
 ; CHECK-LABEL: sdiv64:
 ; CHECK:       ; %bb.0:
 ; CHECK-NEXT:    addi r29,#-8,r29
+; CHECK-NEXT:    .cfi_def_cfa_offset 8
 ; CHECK-NEXT:    st 4[r29],r31 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_escape 0x16, 0x1f, 0x05, 0x34, 0x1c, 0x06, 0x32, 0x24 ; r31 = [CFA-4] * 4
 ; CHECK-NEXT:    jspci r0,#%call(__divdi3),r31
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    nop
@@ -85,7 +89,9 @@ define i64 @shl64(i64 %a, i64 %b) {
 ; CHECK-LABEL: shl64:
 ; CHECK:       ; %bb.0:
 ; CHECK-NEXT:    addi r29,#-8,r29
+; CHECK-NEXT:    .cfi_def_cfa_offset 8
 ; CHECK-NEXT:    st 4[r29],r31 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_escape 0x16, 0x1f, 0x05, 0x34, 0x1c, 0x06, 0x32, 0x24 ; r31 = [CFA-4] * 4
 ; CHECK-NEXT:    jspci r0,#%call(__ashldi3),r31
 ; CHECK-NEXT:    mov r7,r6
 ; CHECK-NEXT:    nop
@@ -114,7 +120,9 @@ define i64 @keep(i64 %a, i64 %b, i32 %c) {
 ; CHECK-LABEL: keep:
 ; CHECK:       ; %bb.0:
 ; CHECK-NEXT:    addi r29,#-8,r29
+; CHECK-NEXT:    .cfi_def_cfa_offset 8
 ; CHECK-NEXT:    st 4[r29],r31 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_escape 0x16, 0x1f, 0x05, 0x34, 0x1c, 0x06, 0x32, 0x24 ; r31 = [CFA-4] * 4
 ; CHECK-NEXT:    jspci r0,#%call(__udivdi3),r31
 ; CHECK-NEXT:    mov r8,r12
 ; CHECK-NEXT:    nop

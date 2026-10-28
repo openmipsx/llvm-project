@@ -14,14 +14,23 @@ define void @far(ptr %p, i32 %n) {
 ; CHECK-LABEL: far:
 ; CHECK:       ; %bb.0: ; %entry
 ; CHECK-NEXT:    addi r29,#-32,r29
+; CHECK-NEXT:    .cfi_def_cfa_offset 32
 ; CHECK-NEXT:    st 28[r29],r16 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_offset r16, -4
 ; CHECK-NEXT:    st 24[r29],r17 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_offset r17, -8
 ; CHECK-NEXT:    st 20[r29],r18 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_offset r18, -12
 ; CHECK-NEXT:    st 16[r29],r19 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_offset r19, -16
 ; CHECK-NEXT:    st 12[r29],r20 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_offset r20, -20
 ; CHECK-NEXT:    st 8[r29],r21 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_offset r21, -24
 ; CHECK-NEXT:    st 4[r29],r22 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_offset r22, -28
 ; CHECK-NEXT:    st 0[r29],r25 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_offset r25, -32
 ; CHECK-NEXT:    mov r0,r2
 ; CHECK-NEXT:    addi r0,#1,r3
 ; CHECK-NEXT:    addi r0,#2,r6
@@ -87,14 +96,23 @@ define void @far(ptr %p, i32 %n) {
 ; NEAR-LABEL: far:
 ; NEAR:       ; %bb.0: ; %entry
 ; NEAR-NEXT:    addi r29,#-32,r29
+; NEAR-NEXT:    .cfi_def_cfa_offset 32
 ; NEAR-NEXT:    st 28[r29],r16 ; 4-byte Folded Spill
+; NEAR-NEXT:    .cfi_offset r16, -4
 ; NEAR-NEXT:    st 24[r29],r17 ; 4-byte Folded Spill
+; NEAR-NEXT:    .cfi_offset r17, -8
 ; NEAR-NEXT:    st 20[r29],r18 ; 4-byte Folded Spill
+; NEAR-NEXT:    .cfi_offset r18, -12
 ; NEAR-NEXT:    st 16[r29],r19 ; 4-byte Folded Spill
+; NEAR-NEXT:    .cfi_offset r19, -16
 ; NEAR-NEXT:    st 12[r29],r20 ; 4-byte Folded Spill
+; NEAR-NEXT:    .cfi_offset r20, -20
 ; NEAR-NEXT:    st 8[r29],r21 ; 4-byte Folded Spill
+; NEAR-NEXT:    .cfi_offset r21, -24
 ; NEAR-NEXT:    st 4[r29],r22 ; 4-byte Folded Spill
+; NEAR-NEXT:    .cfi_offset r22, -28
 ; NEAR-NEXT:    st 0[r29],r25 ; 4-byte Folded Spill
+; NEAR-NEXT:    .cfi_offset r25, -32
 ; NEAR-NEXT:    mov r0,r2
 ; NEAR-NEXT:    addi r0,#1,r3
 ; NEAR-NEXT:    addi r0,#2,r6

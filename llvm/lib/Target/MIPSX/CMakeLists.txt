@@ -18,6 +18,7 @@ add_public_tablegen_target(MIPSXCommonTableGen)
 add_llvm_target(MIPSXCodeGen
   MIPSXAsmPrinter.cpp
   MIPSXDelaySlotFiller.cpp
+  MIPSXFrameCFI.cpp
   MIPSXFrameLowering.cpp
   MIPSXHazardPadding.cpp
   MIPSXInstrInfo.cpp

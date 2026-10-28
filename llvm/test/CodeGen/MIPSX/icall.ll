@@ -12,8 +12,10 @@ define i32 @icall(ptr %f, i32 %x) {
 ; CHECK-LABEL: icall:
 ; CHECK:       ; %bb.0:
 ; CHECK-NEXT:    addi r29,#-8,r29
+; CHECK-NEXT:    .cfi_def_cfa_offset 8
 ; CHECK-NEXT:    lsr r4,r2,#2
 ; CHECK-NEXT:    st 4[r29],r31 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_escape 0x16, 0x1f, 0x05, 0x34, 0x1c, 0x06, 0x32, 0x24 ; r31 = [CFA-4] * 4
 ; CHECK-NEXT:    jspci r2,#0,r31
 ; CHECK-NEXT:    mov r5,r4
 ; CHECK-NEXT:    nop
@@ -26,8 +28,10 @@ define i32 @icall(ptr %f, i32 %x) {
 ; LONG-LABEL: icall:
 ; LONG:       ; %bb.0:
 ; LONG-NEXT:    addi r29,#-8,r29
+; LONG-NEXT:    .cfi_def_cfa_offset 8
 ; LONG-NEXT:    lsr r4,r2,#2
 ; LONG-NEXT:    st 4[r29],r31 ; 4-byte Folded Spill
+; LONG-NEXT:    .cfi_escape 0x16, 0x1f, 0x05, 0x34, 0x1c, 0x06, 0x32, 0x24 ; r31 = [CFA-4] * 4
 ; LONG-NEXT:    jspci r2,#0,r31
 ; LONG-NEXT:    mov r5,r4
 ; LONG-NEXT:    nop
@@ -45,8 +49,10 @@ define void @table(ptr %t) {
 ; CHECK-LABEL: table:
 ; CHECK:       ; %bb.0:
 ; CHECK-NEXT:    addi r29,#-8,r29
+; CHECK-NEXT:    .cfi_def_cfa_offset 8
 ; CHECK-NEXT:    ld 8[r4],r2
 ; CHECK-NEXT:    st 4[r29],r31 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_escape 0x16, 0x1f, 0x05, 0x34, 0x1c, 0x06, 0x32, 0x24 ; r31 = [CFA-4] * 4
 ; CHECK-NEXT:    lsr r2,r2,#2
 ; CHECK-NEXT:    jspci r2,#0,r31
 ; CHECK-NEXT:    nop
@@ -60,8 +66,10 @@ define void @table(ptr %t) {
 ; LONG-LABEL: table:
 ; LONG:       ; %bb.0:
 ; LONG-NEXT:    addi r29,#-8,r29
+; LONG-NEXT:    .cfi_def_cfa_offset 8
 ; LONG-NEXT:    ld 8[r4],r2
 ; LONG-NEXT:    st 4[r29],r31 ; 4-byte Folded Spill
+; LONG-NEXT:    .cfi_escape 0x16, 0x1f, 0x05, 0x34, 0x1c, 0x06, 0x32, 0x24 ; r31 = [CFA-4] * 4
 ; LONG-NEXT:    lsr r2,r2,#2
 ; LONG-NEXT:    jspci r2,#0,r31
 ; LONG-NEXT:    nop
@@ -82,7 +90,9 @@ define i32 @direct(i32 %x) {
 ; CHECK-LABEL: direct:
 ; CHECK:       ; %bb.0:
 ; CHECK-NEXT:    addi r29,#-8,r29
+; CHECK-NEXT:    .cfi_def_cfa_offset 8
 ; CHECK-NEXT:    st 4[r29],r31 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_escape 0x16, 0x1f, 0x05, 0x34, 0x1c, 0x06, 0x32, 0x24 ; r31 = [CFA-4] * 4
 ; CHECK-NEXT:    jspci r0,#%call(f),r31
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    nop
@@ -95,8 +105,10 @@ define i32 @direct(i32 %x) {
 ; LONG-LABEL: direct:
 ; LONG:       ; %bb.0:
 ; LONG-NEXT:    addi r29,#-8,r29
+; LONG-NEXT:    .cfi_def_cfa_offset 8
 ; LONG-NEXT:    addi r0,#%hi(f),r2
 ; LONG-NEXT:    st 4[r29],r31 ; 4-byte Folded Spill
+; LONG-NEXT:    .cfi_escape 0x16, 0x1f, 0x05, 0x34, 0x1c, 0x06, 0x32, 0x24 ; r31 = [CFA-4] * 4
 ; LONG-NEXT:    lsl r2,r2,#15
 ; LONG-NEXT:    addi r2,#%lo(f),r2
 ; LONG-NEXT:    lsr r2,r2,#2

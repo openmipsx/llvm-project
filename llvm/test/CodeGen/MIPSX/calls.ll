@@ -19,8 +19,10 @@ define i32 @call_ten() {
 ; CHECK-LABEL: call_ten:
 ; CHECK:       ; %bb.0:
 ; CHECK-NEXT:    addi r29,#-16,r29
+; CHECK-NEXT:    .cfi_def_cfa_offset 16
 ; CHECK-NEXT:    addi r0,#10,r2
 ; CHECK-NEXT:    st 12[r29],r31 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_escape 0x16, 0x1f, 0x05, 0x34, 0x1c, 0x06, 0x32, 0x24 ; r31 = [CFA-4] * 4
 ; CHECK-NEXT:    addi r0,#1,r4
 ; CHECK-NEXT:    addi r0,#2,r5
 ; CHECK-NEXT:    addi r0,#3,r6
@@ -80,7 +82,9 @@ define void @pass_char(i32 %x) {
 ; CHECK-LABEL: pass_char:
 ; CHECK:       ; %bb.0:
 ; CHECK-NEXT:    addi r29,#-8,r29
+; CHECK-NEXT:    .cfi_def_cfa_offset 8
 ; CHECK-NEXT:    st 4[r29],r31 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_escape 0x16, 0x1f, 0x05, 0x34, 0x1c, 0x06, 0x32, 0x24 ; r31 = [CFA-4] * 4
 ; CHECK-NEXT:    jspci r0,#%call(takes_char),r31
 ; CHECK-NEXT:    lsl r4,r2,#24
 ; CHECK-NEXT:    asr r2,r4,#24
@@ -127,7 +131,9 @@ define i32 @mul(i32 %a, i32 %b) {
 ; CHECK-LABEL: mul:
 ; CHECK:       ; %bb.0:
 ; CHECK-NEXT:    addi r29,#-8,r29
+; CHECK-NEXT:    .cfi_def_cfa_offset 8
 ; CHECK-NEXT:    st 4[r29],r31 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_escape 0x16, 0x1f, 0x05, 0x34, 0x1c, 0x06, 0x32, 0x24 ; r31 = [CFA-4] * 4
 ; CHECK-NEXT:    jspci r0,#%call(__mulsi3),r31
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    nop
@@ -144,7 +150,9 @@ define i32 @udiv(i32 %a, i32 %b) {
 ; CHECK-LABEL: udiv:
 ; CHECK:       ; %bb.0:
 ; CHECK-NEXT:    addi r29,#-8,r29
+; CHECK-NEXT:    .cfi_def_cfa_offset 8
 ; CHECK-NEXT:    st 4[r29],r31 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_escape 0x16, 0x1f, 0x05, 0x34, 0x1c, 0x06, 0x32, 0x24 ; r31 = [CFA-4] * 4
 ; CHECK-NEXT:    jspci r0,#%call(__udivsi3),r31
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    nop

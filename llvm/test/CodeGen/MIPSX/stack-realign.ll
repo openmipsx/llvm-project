@@ -11,10 +11,14 @@ define i32 @f(i32 %a) {
 ; CHECK-LABEL: f:
 ; CHECK:       ; %bb.0:
 ; CHECK-NEXT:    addi r29,#-64,r29
+; CHECK-NEXT:    .cfi_def_cfa_offset 64
 ; CHECK-NEXT:    addi r0,#-32,r1
 ; CHECK-NEXT:    st 56[r29],r30 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_offset r30, -8
 ; CHECK-NEXT:    st 60[r29],r31 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_escape 0x16, 0x1f, 0x05, 0x34, 0x1c, 0x06, 0x32, 0x24 ; r31 = [CFA-4] * 4
 ; CHECK-NEXT:    addi r29,#64,r30
+; CHECK-NEXT:    .cfi_def_cfa r30, 0
 ; CHECK-NEXT:    and r29,r1,r29
 ; CHECK-NEXT:    jspci r0,#%call(g),r31
 ; CHECK-NEXT:    st 28[r29],r4
@@ -43,11 +47,16 @@ define i32 @args(i32 %a0, i32 %a1, i32 %a2, i32 %a3, i32 %a4, i32 %a5,
 ; CHECK-LABEL: args:
 ; CHECK:       ; %bb.0:
 ; CHECK-NEXT:    addi r29,#-16,r29
+; CHECK-NEXT:    .cfi_def_cfa_offset 16
 ; CHECK-NEXT:    addi r0,#-16,r1
 ; CHECK-NEXT:    st 8[r29],r30 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_offset r30, -8
 ; CHECK-NEXT:    st 12[r29],r31 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_escape 0x16, 0x1f, 0x05, 0x34, 0x1c, 0x06, 0x32, 0x24 ; r31 = [CFA-4] * 4
 ; CHECK-NEXT:    st 4[r29],r16 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_offset r16, -12
 ; CHECK-NEXT:    addi r29,#16,r30
+; CHECK-NEXT:    .cfi_def_cfa r30, 0
 ; CHECK-NEXT:    and r29,r1,r29
 ; CHECK-NEXT:    ld 0[r30],r16
 ; CHECK-NEXT:    jspci r0,#%call(g),r31
@@ -77,10 +86,14 @@ define i32 @outgoing() {
 ; CHECK-LABEL: outgoing:
 ; CHECK:       ; %bb.0:
 ; CHECK-NEXT:    addi r29,#-96,r29
+; CHECK-NEXT:    .cfi_def_cfa_offset 96
 ; CHECK-NEXT:    addi r0,#-32,r1
 ; CHECK-NEXT:    st 88[r29],r30 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_offset r30, -8
 ; CHECK-NEXT:    st 92[r29],r31 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_escape 0x16, 0x1f, 0x05, 0x34, 0x1c, 0x06, 0x32, 0x24 ; r31 = [CFA-4] * 4
 ; CHECK-NEXT:    addi r29,#96,r30
+; CHECK-NEXT:    .cfi_def_cfa r30, 0
 ; CHECK-NEXT:    and r29,r1,r29
 ; CHECK-NEXT:    addi r29,#16,r2
 ; CHECK-NEXT:    addi r29,#32,r4

@@ -24,7 +24,7 @@
 // prologue and epilogue. The callee-saved slots lie above every other
 // object, so moving the others down does not make them overlap.
 //
-// TODO (work package S17): CFI.
+// CFI is added after scheduling, by MIPSXFrameCFI.cpp.
 //
 //===----------------------------------------------------------------------===//
 

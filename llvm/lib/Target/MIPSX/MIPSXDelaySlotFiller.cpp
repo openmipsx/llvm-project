@@ -230,7 +230,9 @@ unsigned MIPSXDelaySlotFiller::fillFromAbove(MachineBasicBlock &MBB,
   unsigned Budget = 16;
   for (auto I = Br.getReverseIterator(); ++I != MBB.instr_rend();) {
     MachineInstr &MI = *I;
-    if (MI.isDebugInstr())
+    // Prologue CFI stays before the branch, so -g does not change the code
+    // (MIPSXFrameCFI.cpp).
+    if (MI.isDebugInstr() || MI.isCFIInstruction())
       continue;
     // Nothing moves across a barrier (MEMBARRIER, from a fence).
     if (MI.isBundled() || MI.hasDelaySlot() || MI.isInlineAsm() ||

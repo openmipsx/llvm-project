@@ -13,11 +13,15 @@ define void @dyn_call(i32 %n) {
 ; CHECK-LABEL: dyn_call:
 ; CHECK:       ; %bb.0:
 ; CHECK-NEXT:    addi r29,#-8,r29
+; CHECK-NEXT:    .cfi_def_cfa_offset 8
 ; CHECK-NEXT:    lsl r4,r2,#2
 ; CHECK-NEXT:    addi r0,#-8,r3
 ; CHECK-NEXT:    st 0[r29],r30 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_offset r30, -8
 ; CHECK-NEXT:    st 4[r29],r31 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_escape 0x16, 0x1f, 0x05, 0x34, 0x1c, 0x06, 0x32, 0x24 ; r31 = [CFA-4] * 4
 ; CHECK-NEXT:    addi r29,#8,r30
+; CHECK-NEXT:    .cfi_def_cfa r30, 0
 ; CHECK-NEXT:    addi r2,#7,r2
 ; CHECK-NEXT:    and r2,r3,r2
 ; CHECK-NEXT:    jspci r0,#%call(use),r31
@@ -53,9 +57,13 @@ define i32 @arg_fp(i32 %a1, i32 %a2, i32 %a3, i32 %a4, i32 %a5, i32 %a6,
 ; CHECK-LABEL: arg_fp:
 ; CHECK:       ; %bb.0:
 ; CHECK-NEXT:    addi r29,#-8,r29
+; CHECK-NEXT:    .cfi_def_cfa_offset 8
 ; CHECK-NEXT:    st 0[r29],r30 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_offset r30, -8
 ; CHECK-NEXT:    addi r29,#8,r30
+; CHECK-NEXT:    .cfi_def_cfa r30, 0
 ; CHECK-NEXT:    st 4[r29],r31 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_escape 0x16, 0x1f, 0x05, 0x34, 0x1c, 0x06, 0x32, 0x24 ; r31 = [CFA-4] * 4
 ; CHECK-NEXT:    ld 0[r30],r2
 ; CHECK-NEXT:    addi r30,#-8,r29
 ; CHECK-NEXT:    ld 4[r29],r31 ; 4-byte Folded Reload
@@ -76,6 +84,7 @@ define void @big_fp(i32 %n) {
 ; CHECK-NEXT:    lsl r1,r1,#15
 ; CHECK-NEXT:    addi r1,#28296,r1
 ; CHECK-NEXT:    add r29,r1,r29
+; CHECK-NEXT:    .cfi_def_cfa_offset 70008
 ; CHECK-NEXT:    addi r0,#2,r1
 ; CHECK-NEXT:    lsl r4,r2,#2
 ; CHECK-NEXT:    addi r0,#-8,r3
@@ -85,15 +94,18 @@ define void @big_fp(i32 %n) {
 ; CHECK-NEXT:    and r2,r3,r2
 ; CHECK-NEXT:    add r29,r1,r1
 ; CHECK-NEXT:    st 0[r1],r31 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_escape 0x16, 0x1f, 0x05, 0x34, 0x1c, 0x06, 0x32, 0x24 ; r31 = [CFA-4] * 4
 ; CHECK-NEXT:    addi r0,#2,r1
 ; CHECK-NEXT:    lsl r1,r1,#15
 ; CHECK-NEXT:    addi r1,#4464,r1
 ; CHECK-NEXT:    add r29,r1,r1
 ; CHECK-NEXT:    st 0[r1],r30 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_offset r30, -8
 ; CHECK-NEXT:    addi r0,#2,r1
 ; CHECK-NEXT:    lsl r1,r1,#15
 ; CHECK-NEXT:    addi r1,#4472,r1
 ; CHECK-NEXT:    add r29,r1,r30
+; CHECK-NEXT:    .cfi_def_cfa r30, 0
 ; CHECK-NEXT:    sub r29,r2,r29
 ; CHECK-NEXT:    addi r0,#-3,r1
 ; CHECK-NEXT:    lsl r1,r1,#15
