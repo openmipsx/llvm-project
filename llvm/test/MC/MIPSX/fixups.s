@@ -1,5 +1,5 @@
-; Symbolic operands produce fixups (resolved or turned into relocations by
-; the object writer, which is not implemented yet).
+; Symbolic operands produce fixups, shown by -show-encoding (resolved or turned
+; into relocations by the object writer: see relocs.s and fixup-resolve.s).
 ; RUN: llvm-mc -triple=mipsx -show-encoding %s | FileCheck %s
 
 beq r1,r2,foo

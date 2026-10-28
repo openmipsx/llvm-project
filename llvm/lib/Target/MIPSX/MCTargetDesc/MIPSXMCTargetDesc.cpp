@@ -10,7 +10,10 @@
 #include "MIPSXInstPrinter.h"
 #include "MIPSXMCAsmInfo.h"
 #include "TargetInfo/MIPSXTargetInfo.h"
+#include "llvm/BinaryFormat/ELF.h"
+#include "llvm/MC/MCELFObjectWriter.h"
 #include "llvm/MC/MCELFStreamer.h"
+#include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
@@ -59,6 +62,26 @@ static MCInstPrinter *createMIPSXMCInstPrinter(const Triple & /*T*/,
   return nullptr;
 }
 
+namespace {
+// Sets e_flags from the subtarget (docs/abi.md section 11.2).
+class MIPSXELFTargetStreamer : public MCTargetStreamer {
+public:
+  MIPSXELFTargetStreamer(MCStreamer &S, const MCSubtargetInfo &STI)
+      : MCTargetStreamer(S) {
+    ELFObjectWriter &W = static_cast<MCELFStreamer &>(S).getWriter();
+    unsigned EFlags = W.getELFHeaderEFlags();
+    if (STI.hasFeature(MIPSX::FeatureES3890))
+      EFlags |= ELF::EF_MIPSX_ES3890;
+    W.setELFHeaderEFlags(EFlags);
+  }
+};
+} // end anonymous namespace
+
+static MCTargetStreamer *
+createMIPSXObjectTargetStreamer(MCStreamer &S, const MCSubtargetInfo &STI) {
+  return new MIPSXELFTargetStreamer(S, STI);
+}
+
 extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void
 LLVMInitializeMIPSXTargetMC() {
   Target &T = getTheMIPSXTarget();
@@ -69,4 +92,6 @@ LLVMInitializeMIPSXTargetMC() {
   TargetRegistry::RegisterMCCodeEmitter(T, createMIPSXMCCodeEmitter);
   TargetRegistry::RegisterMCAsmBackend(T, createMIPSXAsmBackend);
   TargetRegistry::RegisterMCInstPrinter(T, createMIPSXMCInstPrinter);
+  TargetRegistry::RegisterObjectTargetStreamer(T,
+                                               createMIPSXObjectTargetStreamer);
 }
