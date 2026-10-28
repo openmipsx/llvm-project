@@ -1836,6 +1836,29 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
       }
     }
 
+    // MIPS-X code bases and global pointer (MIPS-X SDK docs/abi.md section
+    // 13.1), unless the linker script defines them. R_MIPSX_CALL17 and
+    // R_MIPSX_GPREL17 use them even when no input file names them.
+    if (ctx.arg.emachine == EM_MIPS_X) {
+      auto define = [&](StringRef name, SectionBase *sec, uint64_t val) {
+        Symbol *s = ctx.symtab->find(name);
+        if (s && s->isDefined())
+          return;
+        s = ctx.symtab->addSymbol(Defined{ctx, ctx.internalFile, name,
+                                          STB_GLOBAL, STV_HIDDEN, STT_NOTYPE,
+                                          val, /*size=*/0, sec});
+        s->isUsedInRegularObj = true;
+      };
+      if (OutputSection *text = findSection(ctx, ".text")) {
+        define("__mipsx_cb0", text, 0x40000);
+        define("__mipsx_cb1", text, 0xc0000);
+      }
+      OutputSection *data = findSection(ctx, ".sdata");
+      if (!data)
+        data = findSection(ctx, ".data");
+      define("_gp", data, 0x10000);
+    }
+
     if (ctx.arg.emachine == EM_386 || ctx.arg.emachine == EM_X86_64) {
       // On targets that support TLSDESC, _TLS_MODULE_BASE_ is defined in such a
       // way that:
