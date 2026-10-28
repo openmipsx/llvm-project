@@ -4,7 +4,9 @@
 ; RUN:   | FileCheck --check-prefix=OBJ %s
 
 ; Global addresses use %hi / lsl 15 / %lo (docs/abi.md section 6.2), with
-; constant offsets folded into the relocations.
+; constant offsets folded into the relocations. A load or store takes the
+; %lo part as its offset, so it needs only %hi / lsl 15 before it; a load
+; and a store of the same global share them.
 
 @g = global i32 5
 @arr = global [4 x i16] zeroinitializer
@@ -13,10 +15,9 @@ define i32 @load_global() {
 ; CHECK-LABEL: load_global:
 ; CHECK:       ; %bb.0:
 ; CHECK-NEXT:    addi r0,#%hi(g),r2
-; CHECK-NEXT:    lsl r2,r2,#15
-; CHECK-NEXT:    addi r2,#%lo(g),r3
+; CHECK-NEXT:    lsl r2,r3,#15
 ; CHECK-NEXT:    ret
-; CHECK-NEXT:    ld 0[r3],r2
+; CHECK-NEXT:    ld %lo(g)[r3],r2
 ; CHECK-NEXT:    nop
   %v = load i32, ptr @g
   ret i32 %v
@@ -26,10 +27,9 @@ define void @store_element(i16 %v) {
 ; CHECK-LABEL: store_element:
 ; CHECK:       ; %bb.0:
 ; CHECK-NEXT:    addi r0,#%hi(arr+6),r2
-; CHECK-NEXT:    lsl r2,r2,#15
 ; CHECK-NEXT:    ret
-; CHECK-NEXT:    addi r2,#%lo(arr+6),r2
-; CHECK-NEXT:    sth 0[r2],r4
+; CHECK-NEXT:    lsl r2,r2,#15
+; CHECK-NEXT:    sth %lo(arr+6)[r2],r4
   %p = getelementptr [4 x i16], ptr @arr, i32 0, i32 3
   store i16 %v, ptr %p
   ret void
@@ -45,9 +45,44 @@ define ptr @address() {
   ret ptr getelementptr (i8, ptr @g, i32 4)
 }
 
+define void @increment() {
+; CHECK-LABEL: increment:
+; CHECK:       ; %bb.0:
+; CHECK-NEXT:    addi r0,#%hi(g),r2
+; CHECK-NEXT:    lsl r2,r2,#15
+; CHECK-NEXT:    ld %lo(g)[r2],r3
+; CHECK-NEXT:    ret
+; CHECK-NEXT:    addi r3,#1,r3
+; CHECK-NEXT:    st %lo(g)[r2],r3
+  %v = load i32, ptr @g
+  %w = add i32 %v, 1
+  store i32 %w, ptr @g
+  ret void
+}
+
+@ext = external global i8
+
+define i32 @load_external_byte() {
+; CHECK-LABEL: load_external_byte:
+; CHECK:       ; %bb.0:
+; CHECK-NEXT:    addi r0,#%hi(ext),r2
+; CHECK-NEXT:    lsl r2,r3,#15
+; CHECK-NEXT:    ret
+; CHECK-NEXT:    ldbu %lo(ext)[r3],r2
+; CHECK-NEXT:    nop
+  %v = load i8, ptr @ext
+  %w = zext i8 %v to i32
+  ret i32 %w
+}
+
 ; OBJ:      R_MIPSX_HI17 g
 ; OBJ:      R_MIPSX_LO15 g
 ; OBJ:      R_MIPSX_HI17 arr+0x6
 ; OBJ:      R_MIPSX_LO15 arr+0x6
 ; OBJ:      R_MIPSX_HI17 g+0x4
 ; OBJ:      R_MIPSX_LO15 g+0x4
+; OBJ:      R_MIPSX_HI17 g
+; OBJ:      R_MIPSX_LO15 g
+; OBJ:      R_MIPSX_LO15 g
+; OBJ:      R_MIPSX_HI17 ext
+; OBJ:      R_MIPSX_LO15 ext

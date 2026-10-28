@@ -42,7 +42,7 @@ define void @load_store() {
 ; Nothing moves across a fence, not even into a delay slot: the store stays
 ; above the barrier rather than filling the return's slot.
 ; CHECK-LABEL: fence:
-; CHECK: st 0[r2],r4
+; CHECK: st %lo(x)[r2],r4
 ; CHECK-NEXT: ;MEMBARRIER
 ; CHECK-NEXT: ret
 ; CHECK-NEXT: nop
