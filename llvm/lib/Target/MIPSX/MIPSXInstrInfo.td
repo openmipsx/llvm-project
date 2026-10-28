@@ -231,3 +231,4 @@ def : InstAlias<"mov\t$rs1,$rd", (ADD GPR:$rd, GPR:$rs1, R0), 1>;
 def : InstAlias<"ret", (JSPCI R0, R31, 0), 1>;
 def : InstAlias<"b\t$dst", (BEQ R0, R0, brtarget:$dst), 1>;
 def : InstAlias<"bra\t$dst", (BEQ R0, R0, brtarget:$dst), 0>;
+def : InstAlias<"bsq\t$dst", (BEQSQ R0, R0, brtarget:$dst), 1>;
