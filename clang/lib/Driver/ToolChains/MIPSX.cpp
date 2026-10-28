@@ -126,8 +126,11 @@ void mipsx::Linker::ConstructJob(Compilation &C, const JobAction &JA,
       !Args.hasArg(options::OPT_nostdlib, options::OPT_nodefaultlibs)) {
     CmdArgs.push_back("--start-group");
     // There is no C library yet (plan S15); link one if the sysroot has it.
+    // GetFilePath returns the bare name when it finds nothing (a relative
+    // sysroot gives a relative path, so test for that, not for an absolute
+    // path).
     if (!Args.hasArg(options::OPT_nolibc) &&
-        llvm::sys::path::is_absolute(TC.GetFilePath("libc.a")))
+        TC.GetFilePath("libc.a") != "libc.a")
       CmdArgs.push_back("-lc");
     // The multiply, divide and shift helpers the code generator calls.
     CmdArgs.push_back("-lbuiltins");

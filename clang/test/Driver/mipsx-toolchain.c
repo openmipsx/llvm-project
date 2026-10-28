@@ -29,6 +29,9 @@
 // RUN: %clang -### --target=mipsx --sysroot=%S/Inputs/mipsx_libc_tree %s 2>&1 \
 // RUN:   | FileCheck --check-prefix=LIBC %s
 // LIBC: "--start-group" "-lc" "-lbuiltins" "-lsim" "--end-group"
+// A relative sysroot finds it too.
+// RUN: cd %S && %clang -### --target=mipsx --sysroot=Inputs/mipsx_libc_tree \
+// RUN:   %s 2>&1 | FileCheck --check-prefix=LIBC %s
 // RUN: %clang -### --target=mipsx --sysroot=%S/Inputs/mipsx_libc_tree \
 // RUN:   -nolibc %s 2>&1 | FileCheck --check-prefix=NOLIBC %s
 // NOLIBC: "--start-group" "-lbuiltins" "-lsim" "--end-group"
