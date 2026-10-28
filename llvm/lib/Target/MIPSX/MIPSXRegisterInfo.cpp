@@ -90,10 +90,13 @@ bool MIPSXRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   // With a frame pointer (fp = CFA) the body addresses the frame from fp,
   // since sp moves with dynamic allocas; the prologue and epilogue use sp,
   // which is valid there, so that restoring fp never loads through fp.
+  // A realigned frame addresses its non-fixed objects from the aligned sp
+  // (MIPSXFrameLowering.cpp).
   Register Base = MIPSX::R29;
   if (getFrameLowering(MF)->hasFP(MF) &&
       !MI.getFlag(MachineInstr::FrameSetup) &&
-      !MI.getFlag(MachineInstr::FrameDestroy))
+      !MI.getFlag(MachineInstr::FrameDestroy) &&
+      !(hasStackRealignment(MF) && !MFI.isFixedObjectIndex(FI)))
     Base = MIPSX::R30;
   else
     Offset += MFI.getStackSize();

@@ -17,6 +17,13 @@
 // are at fp - 4 and fp - 8, so frames form a chain. Its epilogue resets sp
 // from fp before restoring registers.
 //
+// Objects aligned beyond 8 bytes realign the stack: the prologue then rounds
+// sp down to that alignment after setting fp. The body addresses fixed
+// objects (incoming arguments, r31 and r30) from fp and the others from the
+// aligned sp; the callee-saved stores and loads use the unaligned sp in the
+// prologue and epilogue. The callee-saved slots lie above every other
+// object, so moving the others down does not make them overlap.
+//
 // TODO (work package S17): CFI.
 //
 //===----------------------------------------------------------------------===//
@@ -37,14 +44,23 @@ using namespace llvm;
 bool MIPSXFrameLowering::hasFPImpl(const MachineFunction &MF) const {
   const MachineFrameInfo &MFI = MF.getFrameInfo();
   return MFI.hasVarSizedObjects() || MFI.isFrameAddressTaken() ||
-         MF.getTarget().Options.DisableFramePointerElim(MF);
+         MF.getTarget().Options.DisableFramePointerElim(MF) ||
+         STI.getRegisterInfo()->hasStackRealignment(MF);
 }
 
 void MIPSXFrameLowering::emitPrologue(MachineFunction &MF,
                                       MachineBasicBlock &MBB) const {
   MachineFrameInfo &MFI = MF.getFrameInfo();
-  if (MFI.getMaxAlign() > getStackAlign())
-    report_fatal_error("MIPS-X: stack objects aligned beyond 8 bytes are not "
+  bool Realign = STI.getRegisterInfo()->hasStackRealignment(MF);
+  if (MFI.getMaxAlign() > getStackAlign() && !Realign)
+    report_fatal_error("MIPS-X: stack objects aligned beyond 8 bytes need "
+                       "stack realignment");
+  // Dynamic allocas would need a base pointer as well.
+  if (Realign && MFI.hasVarSizedObjects())
+    report_fatal_error("MIPS-X: stack realignment with dynamic allocas is not "
+                       "supported");
+  if (Realign && MFI.getMaxAlign() > Align(1 << 16))
+    report_fatal_error("MIPS-X: stack objects aligned beyond 64 KB are not "
                        "supported");
 
   uint64_t StackSize = alignTo(MFI.getStackSize(), getStackAlign());
@@ -65,6 +81,17 @@ void MIPSXFrameLowering::emitPrologue(MachineFunction &MF,
     ++I;
   TII.adjustReg(MBB, I, DL, MIPSX::R30, MIPSX::R29, int64_t(StackSize),
                 MachineInstr::FrameSetup);
+  if (!Realign)
+    return;
+  // sp &= -MaxAlign, the mask built in r1.
+  BuildMI(MBB, I, DL, TII.get(MIPSX::ADDI), MIPSX::R1)
+      .addReg(MIPSX::R0)
+      .addImm(-int64_t(MFI.getMaxAlign().value()))
+      .setMIFlag(MachineInstr::FrameSetup);
+  BuildMI(MBB, I, DL, TII.get(MIPSX::AND), MIPSX::R29)
+      .addReg(MIPSX::R29)
+      .addReg(MIPSX::R1)
+      .setMIFlag(MachineInstr::FrameSetup);
 }
 
 void MIPSXFrameLowering::emitEpilogue(MachineFunction &MF,
