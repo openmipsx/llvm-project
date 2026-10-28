@@ -58,14 +58,18 @@ char MIPSXDAGToDAGISelLegacy::ID = 0;
 
 INITIALIZE_PASS(MIPSXDAGToDAGISelLegacy, DEBUG_TYPE, PASS_NAME, false, false)
 
-// The %lo operand of the last addi of a %hi/%lo address, or an empty value.
+// The %lo operand of the last addi of a %hi/%lo address, or the %gprel
+// operand of addi gp,#%gprel(sym),rd; otherwise an empty value.
 static SDValue getLoOperand(SDValue Addr) {
   if (!Addr.isMachineOpcode() || Addr.getMachineOpcode() != MIPSX::ADDI)
     return SDValue();
   SDValue Op = Addr.getOperand(1);
   unsigned Flags;
-  if (auto *GA = dyn_cast<GlobalAddressSDNode>(Op))
+  if (auto *GA = dyn_cast<GlobalAddressSDNode>(Op)) {
+    if (GA->getTargetFlags() == MIPSXII::MO_GPREL)
+      return Op;
     Flags = GA->getTargetFlags();
+  }
   else if (auto *ES = dyn_cast<ExternalSymbolSDNode>(Op))
     Flags = ES->getTargetFlags();
   else if (auto *JT = dyn_cast<JumpTableSDNode>(Op))
@@ -80,7 +84,8 @@ static SDValue getLoOperand(SDValue Addr) {
 // Loads and stores take a base register and a 17-bit offset. The %lo part
 // of a symbol's address goes in the offset, since it is never negative
 // (docs/abi.md section 6.2): addi r0,#%hi(g),r2; lsl r2,r2,#15;
-// ld %lo(g)[r2],r3.
+// ld %lo(g)[r2],r3. Small data needs no address at all:
+// ld %gprel(g)[gp],r3 (section 6.3).
 bool MIPSXDAGToDAGISel::selectAddrRegImm(SDValue Addr, SDValue &Base,
                                          SDValue &Offset) {
   if (SDValue Lo = getLoOperand(Addr)) {

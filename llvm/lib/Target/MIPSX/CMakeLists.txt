@@ -27,6 +27,7 @@ add_llvm_target(MIPSXCodeGen
   MIPSXSelectionDAGInfo.cpp
   MIPSXSubtarget.cpp
   MIPSXTargetMachine.cpp
+  MIPSXTargetObjectFile.cpp
 
   LINK_COMPONENTS
   AsmPrinter

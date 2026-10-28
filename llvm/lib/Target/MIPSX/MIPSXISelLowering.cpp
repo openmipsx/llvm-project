@@ -19,6 +19,7 @@
 #include "MIPSXMachineFunctionInfo.h"
 #include "MIPSXSelectionDAGInfo.h"
 #include "MIPSXSubtarget.h"
+#include "MIPSXTargetObjectFile.h"
 #include "llvm/CodeGen/CallingConvLower.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
@@ -30,6 +31,7 @@
 #include "llvm/IR/Function.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/MC/MCExpr.h"
+#include "llvm/Target/TargetMachine.h"
 #include "llvm/Support/ErrorHandling.h"
 
 using namespace llvm;
@@ -176,6 +178,22 @@ SDValue MIPSXTargetLowering::LowerGlobalAddress(SDValue Op,
   const auto *N = cast<GlobalAddressSDNode>(Op);
   const GlobalValue *GV = N->getGlobal();
   int64_t Offset = N->getOffset();
+  // Small data: addi gp,#%gprel(sym),rd (abi section 6.3). Only for an
+  // address inside the variable: gp reaches the small data sections, and
+  // a[i - 1] or a far offset may lie outside them.
+  const auto &TLOF = static_cast<const MIPSXTargetObjectFile &>(
+      *getTargetMachine().getObjFileLowering());
+  const auto *GVar = dyn_cast<GlobalVariable>(GV);
+  if (GVar && GVar->getValueType()->isSized() && Offset >= 0 &&
+      uint64_t(Offset) <
+          DAG.getDataLayout().getTypeAllocSize(GVar->getValueType()) &&
+      TLOF.isGlobalInSmallSection(GVar, getTargetMachine()))
+    return SDValue(
+        DAG.getMachineNode(MIPSX::ADDI, DL, MVT::i32,
+                           DAG.getRegister(MIPSX::R28, MVT::i32),
+                           DAG.getTargetGlobalAddress(GV, DL, MVT::i32, Offset,
+                                                      MIPSXII::MO_GPREL)),
+        0);
   return buildHiLo(
       DAG, DL,
       DAG.getTargetGlobalAddress(GV, DL, MVT::i32, Offset, MIPSXII::MO_HI),

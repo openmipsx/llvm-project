@@ -9,9 +9,9 @@
 #include "MIPSXTargetMachine.h"
 #include "MIPSX.h"
 #include "MIPSXMachineFunctionInfo.h"
+#include "MIPSXTargetObjectFile.h"
 #include "TargetInfo/MIPSXTargetInfo.h"
 #include "llvm/CodeGen/Passes.h"
-#include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/Compiler.h"
@@ -36,7 +36,7 @@ MIPSXTargetMachine::MIPSXTargetMachine(const Target &T, const Triple &TT,
     : CodeGenTargetMachineImpl(T, TT.computeDataLayout(), TT, CPU, FS, Options,
                                RM.value_or(Reloc::Static),
                                getEffectiveCodeModel(CM, CodeModel::Small), OL),
-      TLOF(std::make_unique<TargetLoweringObjectFileELF>()),
+      TLOF(std::make_unique<MIPSXTargetObjectFile>()),
       Subtarget(TT, CPU, FS, *this) {
   initAsmInfo();
 }

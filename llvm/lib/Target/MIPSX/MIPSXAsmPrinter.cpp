@@ -84,6 +84,8 @@ static MIPSX::Specifier getSpecifier(const MachineOperand &MO) {
     return MIPSX::S_LO;
   case MIPSXII::MO_CALL:
     return MIPSX::S_CALL;
+  case MIPSXII::MO_GPREL:
+    return MIPSX::S_GPREL;
   }
   llvm_unreachable("Unknown target flag on a symbol operand");
 }

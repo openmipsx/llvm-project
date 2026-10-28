@@ -27,6 +27,7 @@ enum TOF {
   MO_HI, // %hi(sym)
   MO_LO, // %lo(sym)
   MO_CALL, // %call(sym)
+  MO_GPREL, // %gprel(sym)
 };
 } // namespace MIPSXII
 
