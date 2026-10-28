@@ -393,6 +393,37 @@ static uint64_t resolveLanai(uint64_t Type, uint64_t Offset, uint64_t S,
   llvm_unreachable("Invalid relocation type");
 }
 
+static bool supportsMIPSX(uint64_t Type) {
+  switch (Type) {
+  case ELF::R_MIPSX_NONE:
+  case ELF::R_MIPSX_32:
+  case ELF::R_MIPSX_16:
+  case ELF::R_MIPSX_8:
+  case ELF::R_MIPSX_32_PCREL:
+    return true;
+  default:
+    return false;
+  }
+}
+
+static uint64_t resolveMIPSX(uint64_t Type, uint64_t Offset, uint64_t S,
+                             uint64_t LocData, int64_t Addend) {
+  switch (Type) {
+  case ELF::R_MIPSX_NONE:
+    return LocData;
+  case ELF::R_MIPSX_32:
+    return (S + Addend) & 0xFFFFFFFF;
+  case ELF::R_MIPSX_16:
+    return (S + Addend) & 0xFFFF;
+  case ELF::R_MIPSX_8:
+    return (S + Addend) & 0xFF;
+  case ELF::R_MIPSX_32_PCREL:
+    return (S + Addend - Offset) & 0xFFFFFFFF;
+  default:
+    llvm_unreachable("Invalid relocation type");
+  }
+}
+
 static bool supportsMips32(uint64_t Type) {
   switch (Type) {
   case ELF::R_MIPS_32:
@@ -870,6 +901,8 @@ getRelocationResolver(const ObjectFile &Obj) {
     case Triple::mipsel:
     case Triple::mips:
       return {supportsMips32, resolveMips32};
+    case Triple::mipsx:
+      return {supportsMIPSX, resolveMIPSX};
     case Triple::msp430:
       return {supportsMSP430, resolveMSP430};
     case Triple::sparc:

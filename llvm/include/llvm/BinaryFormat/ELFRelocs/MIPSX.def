@@ -1,0 +1,21 @@
+// MIPS-X (ES3890) relocations, from the MIPS-X SDK ABI document
+// (docs/abi.md section 12). S: symbol value, A: addend, P: place; all
+// byte addresses.
+
+#ifndef ELF_RELOC
+#error "ELF_RELOC must be defined"
+#endif
+
+ELF_RELOC(R_MIPSX_NONE,      0)
+ELF_RELOC(R_MIPSX_32,        1)  // word32 = S + A
+ELF_RELOC(R_MIPSX_16,        2)  // half16 = S + A
+ELF_RELOC(R_MIPSX_8,         3)  // byte8 = S + A
+ELF_RELOC(R_MIPSX_32_PCREL,  4)  // word32 = S + A - P
+ELF_RELOC(R_MIPSX_32W,       5)  // word32 = (S + A) >> 2
+ELF_RELOC(R_MIPSX_PC16,      6)  // disp16 = ((S + A - P) >> 2) - 2
+ELF_RELOC(R_MIPSX_CALL17,    7)  // imm17, src1: offset from a code base
+ELF_RELOC(R_MIPSX_HI17,      8)  // imm17 = (S + A) >> 15
+ELF_RELOC(R_MIPSX_LO15,      9)  // imm17 = (S + A) & 0x7fff
+ELF_RELOC(R_MIPSX_ABS17,    10)  // imm17 = S + A
+ELF_RELOC(R_MIPSX_WORD17,   11)  // imm17 = (S + A) >> 2
+ELF_RELOC(R_MIPSX_GPREL17,  12)  // imm17 = S + A - _gp

@@ -97,6 +97,13 @@ StringRef llvm::object::getELFRelocationTypeName(uint32_t Machine,
       break;
     }
     break;
+  case ELF::EM_MIPS_X:
+    switch (Type) {
+#include "llvm/BinaryFormat/ELFRelocs/MIPSX.def"
+    default:
+      break;
+    }
+    break;
   case ELF::EM_PPC:
     switch (Type) {
 #include "llvm/BinaryFormat/ELFRelocs/PowerPC.def"
