@@ -50,6 +50,9 @@ private:
 
 MIPSX::MIPSX(Ctx &ctx) : TargetInfo(ctx) {
   symbolicRel = R_MIPSX_32;
+  // There are no IFUNCs. The default, 0, is R_MIPSX_NONE, which would make
+  // the relocation scan treat a symbolic R_MIPSX_NONE as one.
+  iRelSymbolicRel = RelType(~0u);
   // hsc (halt).
   trapInstr = {0xcf, 0xc0, 0x00, 0x00};
   defaultImageBase = 0;
@@ -70,8 +73,10 @@ uint32_t MIPSX::calcEFlags() const {
 RelExpr MIPSX::getRelExpr(RelType type, const Symbol &s,
                           const uint8_t *loc) const {
   switch (type) {
+  // R_MIPSX_NONE (from .reloc) may name a symbol. The generic scan would
+  // pass R_NONE on to relocateAlloc, which cannot evaluate it, so treat it as
+  // absolute; relocate() leaves the place unchanged.
   case R_MIPSX_NONE:
-    return R_NONE;
   case R_MIPSX_32:
   case R_MIPSX_16:
   case R_MIPSX_8:
@@ -152,7 +157,7 @@ void MIPSX::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
   case R_MIPSX_GPREL17: {
     std::optional<uint64_t> gp = getSymbolVA("_gp");
     if (!gp) {
-      Err(ctx) << getErrorLoc(ctx, loc) << rel.type
+      Err(ctx) << getErrorLoc(ctx, loc) << "relocation " << rel.type
                << " needs _gp, which is not defined";
       return;
     }
@@ -183,7 +188,8 @@ void MIPSX::relocate(uint8_t *loc, const Relocation &rel, uint64_t val) const {
       write32be(loc, insn);
       return;
     }
-    Err(ctx) << getErrorLoc(ctx, loc) << rel.type << " target 0x"
+    Err(ctx) << getErrorLoc(ctx, loc) << "relocation " << rel.type
+             << " target 0x"
              << utohexstr(uint32_t(val)) << " (" << rel.sym
              << ") is out of reach of r0, __mipsx_cb0 and __mipsx_cb1"
              << "; place the code nearer a code base or use -mlong-calls";
