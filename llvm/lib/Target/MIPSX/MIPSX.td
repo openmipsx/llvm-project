@@ -36,6 +36,7 @@ def FeatureLongCalls
 //===----------------------------------------------------------------------===//
 
 include "MIPSXRegisterInfo.td"
+include "MIPSXSchedule.td"
 include "MIPSXCallingConv.td"
 include "MIPSXInstrInfo.td"
 
@@ -47,9 +48,9 @@ def MIPSXInstrInfo : InstrInfo;
 // Processors
 //===----------------------------------------------------------------------===//
 
-def : ProcessorModel<"mipsx", NoSchedModel, []>;
-def : ProcessorModel<"es3890", NoSchedModel, [FeatureES3890]>;
-def : ProcessorModel<"generic", NoSchedModel, [FeatureES3890]>;
+def : ProcessorModel<"mipsx", MIPSXSchedModel, []>;
+def : ProcessorModel<"es3890", MIPSXSchedModel, [FeatureES3890]>;
+def : ProcessorModel<"generic", MIPSXSchedModel, [FeatureES3890]>;
 
 //===----------------------------------------------------------------------===//
 // Assembly syntax

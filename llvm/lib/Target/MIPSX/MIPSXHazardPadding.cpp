@@ -7,21 +7,20 @@
 //===----------------------------------------------------------------------===//
 //
 // MIPS-X has no interlocks (MIPS-X SDK docs/abi.md section 9). This pass,
-// run just before emission, makes code correct in the simplest way:
+// the last before emission, makes the code meet the rules after
+// MIPSXDelaySlotFiller has done what it can:
 //
-// - every branch and jump (anything with a delay slot) is followed by two
-//   nops, bundled with it (P3; the second slot is never a load, section
-//   9.2);
-// - every load is followed by a nop, so no instruction reads a loaded
-//   register too early, within a block or across a branch, call or return
-//   (P1).
+// - every branch and jump gets exactly two delay-slot instructions in its
+//   bundle; missing ones are nops (P3);
+// - an instruction that reads the destination of the load just before it
+//   (in layout order, across block boundaries) gets a nop in between (P1).
+//   The filler never puts a load in a second delay slot, nor a load in the
+//   first one read by the second, so no load is in flight at a branch
+//   target, a call or a return (section 9.2) and layout order is enough.
 //
 // P2 (a load must not overwrite its address register) is ensured by an
 // early-clobber constraint on load destinations. The code generator does not
-// yet emit the MD instructions (P4).
-//
-// TODO (work package S11): fill the slots with useful instructions and
-// schedule loads away from their uses instead.
+// emit the MD instructions (P4).
 //
 //===----------------------------------------------------------------------===//
 
@@ -33,6 +32,7 @@
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineInstrBundle.h"
+#include "llvm/Support/ErrorHandling.h"
 
 using namespace llvm;
 
@@ -73,32 +73,71 @@ static MachineInstr *insertNop(MachineBasicBlock &MBB,
       .addReg(MIPSX::R0);
 }
 
+// The register a load writes, if MI is a load.
+static Register loadDest(const MachineInstr &MI) {
+  if (!MI.mayLoad() || MI.isCall() || MI.getNumOperands() == 0 ||
+      !MI.getOperand(0).isReg() || !MI.getOperand(0).isDef())
+    return Register();
+  return MI.getOperand(0).getReg();
+}
+
+// Whether the hardware reads Reg when it executes MI: its explicit register
+// operands, and r31 for a return (jspci r31,#0,r0).
+static bool readsReg(const MachineInstr &MI, Register Reg) {
+  if (MI.isReturn() && Reg == MIPSX::R31)
+    return true;
+  for (const MachineOperand &MO : MI.operands())
+    if (MO.isReg() && MO.isUse() && !MO.isImplicit() && MO.getReg() == Reg)
+      return true;
+  return false;
+}
+
 bool MIPSXHazardPadding::runOnMachineFunction(MachineFunction &MF) {
   const MIPSXInstrInfo &TII = *MF.getSubtarget<MIPSXSubtarget>().getInstrInfo();
   bool Changed = false;
 
+  // Two instructions in every delay slot bundle.
   for (MachineBasicBlock &MBB : MF) {
     for (auto I = MBB.instr_begin(), E = MBB.instr_end(); I != E;) {
-      MachineInstr &MI = *I;
-      auto Next = std::next(I);
-      if (MI.isMetaInstruction() || MI.isBundled()) {
-        I = Next;
+      MachineInstr &MI = *I++;
+      if (!MI.hasDelaySlot() || MI.isInsideBundle())
         continue;
+      unsigned Slots = 0;
+      auto End = std::next(MI.getIterator());
+      while (End != MBB.instr_end() && End->isInsideBundle()) {
+        ++Slots;
+        ++End;
       }
-
-      if (MI.hasDelaySlot()) {
-        insertNop(MBB, Next, TII, MI.getDebugLoc());
-        MachineInstr *Last = insertNop(MBB, Next, TII, MI.getDebugLoc());
-        MIBundleBuilder(MBB, MI.getIterator(),
-                        std::next(Last->getIterator()));
-        NumDelaySlotNops += 2;
+      if (Slots > 2)
+        report_fatal_error("MIPS-X: more than two delay-slot instructions");
+      for (; Slots < 2; ++Slots) {
+        MachineInstr *Nop = insertNop(MBB, End, TII, MI.getDebugLoc());
+        Nop->bundleWithPred();
+        ++NumDelaySlotNops;
         Changed = true;
-      } else if (MI.mayLoad()) {
-        insertNop(MBB, Next, TII, MI.getDebugLoc());
+      }
+      I = End;
+    }
+  }
+
+  // Load-use pairs, in layout order.
+  Register Loaded;
+  for (MachineBasicBlock &MBB : MF) {
+    for (auto I = MBB.instr_begin(), E = MBB.instr_end(); I != E; ++I) {
+      MachineInstr &MI = *I;
+      if (MI.isMetaInstruction() || MI.isBundle())
+        continue;
+      if (Loaded && readsReg(MI, Loaded)) {
+        if (MI.isInsideBundle())
+          report_fatal_error("MIPS-X: load-use hazard inside a delay slot");
+        insertNop(MBB, I, TII, MI.getDebugLoc());
         ++NumLoadNops;
         Changed = true;
       }
-      I = Next;
+      Loaded = loadDest(MI);
+      if (Loaded && MI.isInsideBundle() &&
+          (std::next(I) == E || !std::next(I)->isInsideBundle()))
+        report_fatal_error("MIPS-X: load in the second delay slot");
     }
   }
   return Changed;

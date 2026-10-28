@@ -15,10 +15,12 @@ class MIPSXTargetMachine;
 class PassRegistry;
 
 FunctionPass *createMIPSXISelDag(MIPSXTargetMachine &TM);
+FunctionPass *createMIPSXDelaySlotFillerPass();
 FunctionPass *createMIPSXHazardPaddingPass();
 
 void initializeMIPSXAsmPrinterPass(PassRegistry &);
 void initializeMIPSXDAGToDAGISelLegacyPass(PassRegistry &);
+void initializeMIPSXDelaySlotFillerPass(PassRegistry &);
 void initializeMIPSXHazardPaddingPass(PassRegistry &);
 } // namespace llvm
 

@@ -42,6 +42,12 @@ public:
   void ParseSubtargetFeatures(StringRef CPU, StringRef TuneCPU, StringRef FS);
 
   bool hasES3890() const { return HasES3890; }
+
+  // Schedule before and after register allocation, so that loads are
+  // separated from their uses (MIPSXSchedule.td).
+  bool enableMachineScheduler() const override { return true; }
+  bool enablePostRAScheduler() const override { return true; }
+  bool enablePostRAMachineScheduler() const override { return true; }
   bool useLongCalls() const { return UseLongCalls; }
 
   const MIPSXInstrInfo *getInstrInfo() const override { return &InstrInfo; }

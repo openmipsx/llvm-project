@@ -23,6 +23,7 @@ extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeMIPSXTarget() {
   PassRegistry &PR = *PassRegistry::getPassRegistry();
   initializeMIPSXAsmPrinterPass(PR);
   initializeMIPSXDAGToDAGISelLegacyPass(PR);
+  initializeMIPSXDelaySlotFillerPass(PR);
   initializeMIPSXHazardPaddingPass(PR);
 }
 
@@ -67,8 +68,12 @@ public:
   // Far branches (abi section 5.5); sizes include the padding added next.
   void addPreEmitPass() override { addPass(&BranchRelaxationPassID); }
 
-  // Must be last: fills the delay slots and pads the pipeline hazards.
-  void addPreEmitPass2() override { addPass(createMIPSXHazardPaddingPass()); }
+  // Must be last: fill the delay slots, then pad what is left and the load
+  // hazards with nops.
+  void addPreEmitPass2() override {
+    addPass(createMIPSXDelaySlotFillerPass());
+    addPass(createMIPSXHazardPaddingPass());
+  }
 };
 } // namespace
 
