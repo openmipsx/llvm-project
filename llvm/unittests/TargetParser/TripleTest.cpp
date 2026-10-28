@@ -686,6 +686,17 @@ TEST(TripleTest, ParsedIDs) {
   EXPECT_EQ(Triple::UnknownOS, T.getOS());
   EXPECT_EQ(Triple::UnknownEnvironment, T.getEnvironment());
 
+  T = Triple("mipsx-unknown-none-elf");
+  EXPECT_EQ(Triple::mipsx, T.getArch());
+  EXPECT_EQ(Triple::UnknownVendor, T.getVendor());
+  EXPECT_EQ(Triple::UnknownOS, T.getOS());
+  EXPECT_EQ(Triple::ELF, T.getObjectFormat());
+  EXPECT_FALSE(T.isLittleEndian());
+
+  T = Triple("mipsx");
+  EXPECT_EQ(Triple::mipsx, T.getArch());
+  EXPECT_FALSE(T.isMIPS());
+
   T = Triple("amdgcn-mesa-mesa3d");
   EXPECT_EQ(Triple::amdgpu, T.getArch());
   EXPECT_EQ(Triple::Mesa, T.getVendor());
@@ -2089,6 +2100,11 @@ TEST(TripleTest, BitWidthChecks) {
   EXPECT_FALSE(T.isArch64Bit());
 
   T.setArch(Triple::lanai);
+  EXPECT_FALSE(T.isArch16Bit());
+  EXPECT_TRUE(T.isArch32Bit());
+  EXPECT_FALSE(T.isArch64Bit());
+
+  T.setArch(Triple::mipsx);
   EXPECT_FALSE(T.isArch16Bit());
   EXPECT_TRUE(T.isArch32Bit());
   EXPECT_FALSE(T.isArch64Bit());
