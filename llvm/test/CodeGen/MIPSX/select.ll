@@ -43,16 +43,14 @@ define i32 @umin(i32 %a, i32 %b) {
 define i32 @setlt(i32 %a, i32 %b) {
 ; CHECK-LABEL: setlt:
 ; CHECK:       ; %bb.0:
-; CHECK-NEXT:    bltsq r4,r5,.LBB2_3
+; CHECK-NEXT:    bltsq r4,r5,.LBB2_2
 ; CHECK-NEXT:    addi r0,#1,r2
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  ; %bb.1:
 ; CHECK-NEXT:    ret
 ; CHECK-NEXT:    mov r0,r2
 ; CHECK-NEXT:    nop
-; CHECK-NEXT:  ; %bb.2:
-; CHECK-NEXT:    addi r0,#1,r2
-; CHECK-NEXT:  .LBB2_3:
+; CHECK-NEXT:  .LBB2_2:
 ; CHECK-NEXT:    ret
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    nop
@@ -64,16 +62,14 @@ define i32 @setlt(i32 %a, i32 %b) {
 define i32 @seteq(i32 %a, i32 %b) {
 ; CHECK-LABEL: seteq:
 ; CHECK:       ; %bb.0:
-; CHECK-NEXT:    beqsq r4,r5,.LBB3_3
+; CHECK-NEXT:    beqsq r4,r5,.LBB3_2
 ; CHECK-NEXT:    addi r0,#1,r2
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  ; %bb.1:
 ; CHECK-NEXT:    ret
 ; CHECK-NEXT:    mov r0,r2
 ; CHECK-NEXT:    nop
-; CHECK-NEXT:  ; %bb.2:
-; CHECK-NEXT:    addi r0,#1,r2
-; CHECK-NEXT:  .LBB3_3:
+; CHECK-NEXT:  .LBB3_2:
 ; CHECK-NEXT:    ret
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    nop

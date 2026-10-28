@@ -45,16 +45,14 @@ define i32 @chain(ptr %p, i32 %a) {
 define i32 @branch_kill(i32 %a, i32 %b) {
 ; CHECK-LABEL: branch_kill:
 ; CHECK:       ; %bb.0: ; %entry
-; CHECK-NEXT:    bnesq r4,r5,.LBB2_3
+; CHECK-NEXT:    bnesq r4,r5,.LBB2_2
 ; CHECK-NEXT:    mov r0,r2
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  ; %bb.1: ; %t
 ; CHECK-NEXT:    ret
 ; CHECK-NEXT:    addi r4,#7,r2
 ; CHECK-NEXT:    nop
-; CHECK-NEXT:  ; %bb.2: ; %f
-; CHECK-NEXT:    mov r0,r2
-; CHECK-NEXT:  .LBB2_3: ; %f
+; CHECK-NEXT:  .LBB2_2: ; %f
 ; CHECK-NEXT:    ret
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    nop

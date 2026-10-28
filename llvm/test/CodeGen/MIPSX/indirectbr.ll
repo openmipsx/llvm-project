@@ -7,7 +7,7 @@
 define i32 @computed(i32 %x) {
 ; CHECK-LABEL: computed:
 ; CHECK:       ; %bb.0: ; %entry
-; CHECK-NEXT:    beqsq r4,r0,.LBB0_5
+; CHECK-NEXT:    beqsq r4,r0,.LBB0_3
 ; CHECK-NEXT:    addi r0,#%hi(.Ltmp0),r2
 ; CHECK-NEXT:    lsl r2,r2,#15
 ; CHECK-NEXT:  ; %bb.1: ; %entry
@@ -23,10 +23,7 @@ define i32 @computed(i32 %x) {
 ; CHECK-NEXT:    ret
 ; CHECK-NEXT:    addi r0,#2,r2
 ; CHECK-NEXT:    nop
-; CHECK-NEXT:  ; %bb.3:
-; CHECK-NEXT:    addi r0,#%hi(.Ltmp0),r2
-; CHECK-NEXT:    lsl r2,r2,#15
-; CHECK-NEXT:  .LBB0_5:
+; CHECK-NEXT:  .LBB0_3:
 ; CHECK-NEXT:    addi r2,#%lo(.Ltmp0),r2
 ; CHECK-NEXT:    lsr r2,r2,#2
 ; CHECK-NEXT:    jspci r2,#0,r0

@@ -10,7 +10,7 @@ define i32 @sw(i32 %x) {
 ; CHECK-LABEL: sw:
 ; CHECK:       ; %bb.0:
 ; CHECK-NEXT:    addi r0,#3,r2
-; CHECK-NEXT:    blosq r2,r4,.LBB0_7
+; CHECK-NEXT:    blosq r2,r4,.LBB0_6
 ; CHECK-NEXT:    mov r0,r2
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  ; %bb.1:
@@ -40,9 +40,7 @@ define i32 @sw(i32 %x) {
 ; CHECK-NEXT:    ret
 ; CHECK-NEXT:    addi r0,#20,r2
 ; CHECK-NEXT:    nop
-; CHECK-NEXT:  ; %bb.6: ; %d
-; CHECK-NEXT:    mov r0,r2
-; CHECK-NEXT:  .LBB0_7: ; %d
+; CHECK-NEXT:  .LBB0_6: ; %d
 ; CHECK-NEXT:    ret
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    nop

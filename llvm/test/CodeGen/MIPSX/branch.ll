@@ -3,16 +3,16 @@
 
 ; Conditional branches (docs/abi.md section 5.3). Each function branches to its
 ; false block, so the condition is inverted; gt, le, ugt and ule swap the
-; operands. Every branch has two delay-slot nops.
+; operands. Every branch has two delay slots; the store value of the true
+; block, dead on the false path, moves into one.
 
 define void @br_eq(i32 %a, i32 %b, ptr %p) {
 ; CHECK-LABEL: br_eq:
 ; CHECK:       ; %bb.0: ; %entry
 ; CHECK-NEXT:    bne r4,r5,.LBB0_2
-; CHECK-NEXT:    nop
+; CHECK-NEXT:    addi r0,#1,r2
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  ; %bb.1: ; %t
-; CHECK-NEXT:    addi r0,#1,r2
 ; CHECK-NEXT:    st 0[r6],r2
 ; CHECK-NEXT:  .LBB0_2: ; %f
 ; CHECK-NEXT:    ret
@@ -32,10 +32,9 @@ define void @br_ne(i32 %a, i32 %b, ptr %p) {
 ; CHECK-LABEL: br_ne:
 ; CHECK:       ; %bb.0: ; %entry
 ; CHECK-NEXT:    beq r4,r5,.LBB1_2
-; CHECK-NEXT:    nop
+; CHECK-NEXT:    addi r0,#1,r2
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  ; %bb.1: ; %t
-; CHECK-NEXT:    addi r0,#1,r2
 ; CHECK-NEXT:    st 0[r6],r2
 ; CHECK-NEXT:  .LBB1_2: ; %f
 ; CHECK-NEXT:    ret
@@ -55,10 +54,9 @@ define void @br_slt(i32 %a, i32 %b, ptr %p) {
 ; CHECK-LABEL: br_slt:
 ; CHECK:       ; %bb.0: ; %entry
 ; CHECK-NEXT:    bge r4,r5,.LBB2_2
-; CHECK-NEXT:    nop
+; CHECK-NEXT:    addi r0,#1,r2
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  ; %bb.1: ; %t
-; CHECK-NEXT:    addi r0,#1,r2
 ; CHECK-NEXT:    st 0[r6],r2
 ; CHECK-NEXT:  .LBB2_2: ; %f
 ; CHECK-NEXT:    ret
@@ -78,10 +76,9 @@ define void @br_sge(i32 %a, i32 %b, ptr %p) {
 ; CHECK-LABEL: br_sge:
 ; CHECK:       ; %bb.0: ; %entry
 ; CHECK-NEXT:    blt r4,r5,.LBB3_2
-; CHECK-NEXT:    nop
+; CHECK-NEXT:    addi r0,#1,r2
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  ; %bb.1: ; %t
-; CHECK-NEXT:    addi r0,#1,r2
 ; CHECK-NEXT:    st 0[r6],r2
 ; CHECK-NEXT:  .LBB3_2: ; %f
 ; CHECK-NEXT:    ret
@@ -101,10 +98,9 @@ define void @br_sgt(i32 %a, i32 %b, ptr %p) {
 ; CHECK-LABEL: br_sgt:
 ; CHECK:       ; %bb.0: ; %entry
 ; CHECK-NEXT:    bge r5,r4,.LBB4_2
-; CHECK-NEXT:    nop
+; CHECK-NEXT:    addi r0,#1,r2
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  ; %bb.1: ; %t
-; CHECK-NEXT:    addi r0,#1,r2
 ; CHECK-NEXT:    st 0[r6],r2
 ; CHECK-NEXT:  .LBB4_2: ; %f
 ; CHECK-NEXT:    ret
@@ -124,10 +120,9 @@ define void @br_sle(i32 %a, i32 %b, ptr %p) {
 ; CHECK-LABEL: br_sle:
 ; CHECK:       ; %bb.0: ; %entry
 ; CHECK-NEXT:    blt r5,r4,.LBB5_2
-; CHECK-NEXT:    nop
+; CHECK-NEXT:    addi r0,#1,r2
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  ; %bb.1: ; %t
-; CHECK-NEXT:    addi r0,#1,r2
 ; CHECK-NEXT:    st 0[r6],r2
 ; CHECK-NEXT:  .LBB5_2: ; %f
 ; CHECK-NEXT:    ret
@@ -147,10 +142,9 @@ define void @br_ult(i32 %a, i32 %b, ptr %p) {
 ; CHECK-LABEL: br_ult:
 ; CHECK:       ; %bb.0: ; %entry
 ; CHECK-NEXT:    bhs r4,r5,.LBB6_2
-; CHECK-NEXT:    nop
+; CHECK-NEXT:    addi r0,#1,r2
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  ; %bb.1: ; %t
-; CHECK-NEXT:    addi r0,#1,r2
 ; CHECK-NEXT:    st 0[r6],r2
 ; CHECK-NEXT:  .LBB6_2: ; %f
 ; CHECK-NEXT:    ret
@@ -170,10 +164,9 @@ define void @br_uge(i32 %a, i32 %b, ptr %p) {
 ; CHECK-LABEL: br_uge:
 ; CHECK:       ; %bb.0: ; %entry
 ; CHECK-NEXT:    blo r4,r5,.LBB7_2
-; CHECK-NEXT:    nop
+; CHECK-NEXT:    addi r0,#1,r2
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  ; %bb.1: ; %t
-; CHECK-NEXT:    addi r0,#1,r2
 ; CHECK-NEXT:    st 0[r6],r2
 ; CHECK-NEXT:  .LBB7_2: ; %f
 ; CHECK-NEXT:    ret
@@ -193,10 +186,9 @@ define void @br_ugt(i32 %a, i32 %b, ptr %p) {
 ; CHECK-LABEL: br_ugt:
 ; CHECK:       ; %bb.0: ; %entry
 ; CHECK-NEXT:    bhs r5,r4,.LBB8_2
-; CHECK-NEXT:    nop
+; CHECK-NEXT:    addi r0,#1,r2
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  ; %bb.1: ; %t
-; CHECK-NEXT:    addi r0,#1,r2
 ; CHECK-NEXT:    st 0[r6],r2
 ; CHECK-NEXT:  .LBB8_2: ; %f
 ; CHECK-NEXT:    ret
@@ -216,10 +208,9 @@ define void @br_ule(i32 %a, i32 %b, ptr %p) {
 ; CHECK-LABEL: br_ule:
 ; CHECK:       ; %bb.0: ; %entry
 ; CHECK-NEXT:    blo r5,r4,.LBB9_2
-; CHECK-NEXT:    nop
+; CHECK-NEXT:    addi r0,#1,r2
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  ; %bb.1: ; %t
-; CHECK-NEXT:    addi r0,#1,r2
 ; CHECK-NEXT:    st 0[r6],r2
 ; CHECK-NEXT:  .LBB9_2: ; %f
 ; CHECK-NEXT:    ret
@@ -272,10 +263,9 @@ define void @cmp_const(i32 %a, ptr %p) {
 ; CHECK:       ; %bb.0: ; %entry
 ; CHECK-NEXT:    addi r0,#100,r2
 ; CHECK-NEXT:    blt r2,r4,.LBB11_2
-; CHECK-NEXT:    nop
+; CHECK-NEXT:    addi r0,#1,r2
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  ; %bb.1: ; %t
-; CHECK-NEXT:    addi r0,#1,r2
 ; CHECK-NEXT:    st 0[r5],r2
 ; CHECK-NEXT:  .LBB11_2: ; %f
 ; CHECK-NEXT:    ret
@@ -295,10 +285,9 @@ define void @cmp_zero(i32 %a, ptr %p) {
 ; CHECK-LABEL: cmp_zero:
 ; CHECK:       ; %bb.0: ; %entry
 ; CHECK-NEXT:    beq r4,r0,.LBB12_2
-; CHECK-NEXT:    nop
+; CHECK-NEXT:    addi r0,#1,r2
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  ; %bb.1: ; %t
-; CHECK-NEXT:    addi r0,#1,r2
 ; CHECK-NEXT:    st 0[r5],r2
 ; CHECK-NEXT:  .LBB12_2: ; %f
 ; CHECK-NEXT:    ret

@@ -19,7 +19,15 @@
 //    into the slots, becomes the squashing form (the slots execute only if
 //    the branch is taken), and is retargeted past the copies; the target
 //    block is split there. An unconditional branch does the same without
-//    squashing. A loop branch back to its own block is the usual case.
+//    squashing. A loop branch back to its own block is the usual case. If
+//    the branch is the only way into the target, the instructions move
+//    instead of being copied, which also makes the code smaller.
+// 3. From the fall-through: a conditional branch that keeps slots
+//    unfilled after (1) and is the only way into the block it falls
+//    through to takes that block's first instructions, if they do not
+//    store, load only from the stack or small data (an address that is
+//    always valid), and set no register live at the taken target, so that
+//    executing them on the taken path does no harm.
 //
 // Slot contents follow section 9.2: no branch, jump or call in a slot, no
 // load in the second slot, and a load in the first slot only if the second
@@ -45,6 +53,9 @@ using namespace llvm;
 
 STATISTIC(NumFilledAbove, "Number of delay slots filled from above");
 STATISTIC(NumFilledTarget, "Number of delay slots filled from the target");
+STATISTIC(NumMovedTarget, "Number of those moved rather than copied");
+STATISTIC(NumFilledFallThrough,
+          "Number of delay slots filled from the fall-through");
 
 static cl::opt<bool>
     DisableFiller("disable-mipsx-delay-filler", cl::Hidden, cl::init(false),
@@ -54,6 +65,10 @@ static cl::opt<bool>
     DisableSquash("disable-mipsx-squash-fill", cl::Hidden, cl::init(false),
                   cl::desc("Do not fill MIPS-X delay slots from branch "
                            "targets"));
+
+static cl::opt<bool> DisableFallThrough(
+    "disable-mipsx-fallthrough-fill", cl::Hidden, cl::init(false),
+    cl::desc("Do not fill MIPS-X delay slots from fall-through blocks"));
 
 namespace {
 
@@ -80,6 +95,7 @@ private:
                          bool DryRun);
   unsigned fillFromTarget(MachineBasicBlock &MBB, MachineInstr &Br,
                           bool DryRun);
+  unsigned fillFromFallThrough(MachineBasicBlock &MBB, MachineInstr &Br);
 };
 
 // Registers an instruction reads and writes, including implicit operands; a
@@ -296,6 +312,28 @@ static unsigned getSquashOpcode(unsigned Opc) {
   }
 }
 
+// Whether Br, in MBB, is the only way into Dest: Dest has no other
+// predecessor, no other instruction of MBB refers to it, and MBB does not
+// fall through to it. With a null Br, whether falling through from MBB is
+// the only way into Dest.
+static bool isOnlyEntry(MachineBasicBlock &MBB, const MachineInstr *Br,
+                        MachineBasicBlock &Dest) {
+  if (&Dest == &MBB || Dest.pred_size() != 1 || *Dest.pred_begin() != &MBB ||
+      Dest.isEHPad() || Dest.hasAddressTaken() ||
+      Dest.isInlineAsmBrIndirectTarget())
+    return false;
+  for (const MachineInstr &MI : MBB.instrs())
+    if (&MI != Br)
+      for (const MachineOperand &MO : MI.operands())
+        if (MO.isMBB() && MO.getMBB() == &Dest)
+          return false;
+  if (!Br)
+    return true;
+  MachineBasicBlock::const_iterator Last = MBB.getLastNonDebugInstr();
+  return MBB.getNextNode() != &Dest ||
+         (Last != MBB.end() && Last->isBarrier());
+}
+
 unsigned MIPSXDelaySlotFiller::fillFromTarget(MachineBasicBlock &MBB,
                                               MachineInstr &Br, bool DryRun) {
   unsigned Opc = Br.getOpcode();
@@ -327,10 +365,35 @@ unsigned MIPSXDelaySlotFiller::fillFromTarget(MachineBasicBlock &MBB,
   // Copying a branch's own operands is fine: the branch reads them first.
   if (Copy.empty())
     return 0;
+
+  // If Br is the only way into the target, move the instructions: the
+  // target keeps its label and needs no split.
+  MachineFunction &MF = *MBB.getParent();
+  if (isOnlyEntry(MBB, &Br, *Target)) {
+    if (DryRun)
+      return Copy.size();
+    Br.setDesc(TII->get(SqOpc));
+    MachineBasicBlock::instr_iterator After = std::next(Br.getIterator());
+    for (MachineInstr *MI : Copy) {
+      MI->removeFromParent();
+      // A squashed slot's registers may still be needed on the
+      // fall-through path.
+      for (MachineOperand &MO : MI->operands())
+        if (MO.isReg() && MO.isUse())
+          MO.setIsKill(false);
+      MBB.insert(After, MI);
+      MI->bundleWithPred();
+      ++NumFilledTarget;
+      ++NumMovedTarget;
+    }
+    fixSlotLiveness(Br, TRI);
+    fullyRecomputeLiveIns({Target});
+    return Copy.size();
+  }
+
   // The new branch target is what follows the copies: the rest of the
   // target block, split off, or if nothing is left the block it falls
   // through to.
-  MachineFunction &MF = *MBB.getParent();
   MachineBasicBlock::iterator SplitAt = std::next(Copy.back()->getIterator());
   while (SplitAt != Target->end() && SplitAt->isDebugInstr())
     ++SplitAt;
@@ -395,6 +458,68 @@ unsigned MIPSXDelaySlotFiller::fillFromTarget(MachineBasicBlock &MBB,
   return Copy.size();
 }
 
+// Br is a conditional branch that ends MBB, with N < 2 of its slots filled
+// from above. Returns the number of slots it adds.
+unsigned MIPSXDelaySlotFiller::fillFromFallThrough(MachineBasicBlock &MBB,
+                                                   MachineInstr &Br) {
+  if (!Br.isConditionalBranch() || getSquashOpcode(Br.getOpcode()) == 0)
+    return 0;
+  MachineBasicBlock *Target = Br.getOperand(2).getMBB();
+  MachineBasicBlock *FT = MBB.getNextNode();
+  if (!FT || FT == Target || &*MBB.getLastNonDebugInstr() != &Br ||
+      !MBB.isSuccessor(FT) || !isOnlyEntry(MBB, nullptr, *FT))
+    return 0;
+  SmallVector<MachineInstr *, 2> Slots;
+  for (auto I = std::next(Br.getIterator()), E = MBB.instr_end();
+       I != E && I->isBundledWithPred(); ++I)
+    Slots.push_back(&*I);
+  if (Slots.size() >= 2)
+    return 0;
+
+  SmallVector<MachineInstr *, 2> Moved;
+  for (MachineInstr &MI : FT->instrs()) {
+    if (MI.isDebugInstr())
+      continue;
+    if (Slots.size() + Moved.size() == 2 || !canBeInSlot(MI) ||
+        MI.mayStore())
+      break;
+    if (MI.mayLoad()) {
+      Register Base = MI.getOperand(1).getReg();
+      if (Base != MIPSX::R29 && Base != MIPSX::R30 && Base != MIPSX::R28)
+        break;
+    }
+    bool LiveAtTarget = false;
+    for (const MachineOperand &MO : MI.operands())
+      if (MO.isReg() && MO.isDef() && MO.getReg())
+        for (MCRegAliasIterator A(MO.getReg(), TRI, true); A.isValid(); ++A)
+          LiveAtTarget |= Target->isLiveIn(*A);
+    if (LiveAtTarget)
+      break;
+    const MachineInstr *Prev =
+        !Moved.empty() ? Moved.back() : (!Slots.empty() ? Slots.back() : nullptr);
+    if (Prev && !slotsOK(Prev, &MI))
+      break;
+    Moved.push_back(&MI);
+  }
+  if (Moved.empty())
+    return 0;
+  MachineBasicBlock::instr_iterator After =
+      std::next((Slots.empty() ? &Br : Slots.back())->getIterator());
+  for (MachineInstr *MI : Moved) {
+    MI->removeFromParent();
+    // The taken path may still need the registers it reads.
+    for (MachineOperand &MO : MI->operands())
+      if (MO.isReg() && MO.isUse())
+        MO.setIsKill(false);
+    MBB.insert(After, MI);
+    MI->bundleWithPred();
+    ++NumFilledFallThrough;
+  }
+  fixSlotLiveness(Br, TRI);
+  fullyRecomputeLiveIns({FT});
+  return Moved.size();
+}
+
 bool MIPSXDelaySlotFiller::runOnMachineFunction(MachineFunction &MF) {
   if (DisableFiller)
     return false;
@@ -427,6 +552,8 @@ bool MIPSXDelaySlotFiller::runOnMachineFunction(MachineFunction &MF) {
       continue;
     }
     if (Above && fillFromAbove(MBB, *Br, /*DryRun=*/false))
+      Changed = true;
+    if (Above < 2 && !DisableFallThrough && fillFromFallThrough(MBB, *Br))
       Changed = true;
   }
   return Changed;

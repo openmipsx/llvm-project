@@ -10,15 +10,14 @@ define i64 @add64(i64 %a, i64 %b) {
 ; CHECK-LABEL: add64:
 ; CHECK:       ; %bb.0:
 ; CHECK-NEXT:    add r5,r7,r3
-; CHECK-NEXT:    blosq r3,r5,.LBB0_3
+; CHECK-NEXT:    blosq r3,r5,.LBB0_2
 ; CHECK-NEXT:    addi r0,#1,r2
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  ; %bb.1:
 ; CHECK-NEXT:    b .LBB0_3
 ; CHECK-NEXT:    mov r0,r2
 ; CHECK-NEXT:    nop
-; CHECK-NEXT:  ; %bb.2:
-; CHECK-NEXT:    addi r0,#1,r2
+; CHECK-NEXT:  .LBB0_2:
 ; CHECK-NEXT:  .LBB0_3:
 ; CHECK-NEXT:    ret
 ; CHECK-NEXT:    add r4,r6,r4
@@ -30,15 +29,14 @@ define i64 @add64(i64 %a, i64 %b) {
 define i64 @sub64(i64 %a, i64 %b) {
 ; CHECK-LABEL: sub64:
 ; CHECK:       ; %bb.0:
-; CHECK-NEXT:    blosq r5,r7,.LBB1_3
+; CHECK-NEXT:    blosq r5,r7,.LBB1_2
 ; CHECK-NEXT:    addi r0,#1,r2
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  ; %bb.1:
 ; CHECK-NEXT:    b .LBB1_3
 ; CHECK-NEXT:    mov r0,r2
 ; CHECK-NEXT:    nop
-; CHECK-NEXT:  ; %bb.2:
-; CHECK-NEXT:    addi r0,#1,r2
+; CHECK-NEXT:  .LBB1_2:
 ; CHECK-NEXT:  .LBB1_3:
 ; CHECK-NEXT:    sub r4,r6,r3
 ; CHECK-NEXT:    ret
@@ -122,15 +120,14 @@ define i64 @keep(i64 %a, i64 %b, i32 %c) {
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    mov r3,r4
 ; CHECK-NEXT:    add r4,r12,r3
-; CHECK-NEXT:    blosq r3,r4,.LBB6_3
+; CHECK-NEXT:    blosq r3,r4,.LBB6_2
 ; CHECK-NEXT:    addi r0,#1,r4
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  ; %bb.1:
 ; CHECK-NEXT:    b .LBB6_3
 ; CHECK-NEXT:    mov r0,r4
 ; CHECK-NEXT:    nop
-; CHECK-NEXT:  ; %bb.2:
-; CHECK-NEXT:    addi r0,#1,r4
+; CHECK-NEXT:  .LBB6_2:
 ; CHECK-NEXT:  .LBB6_3:
 ; CHECK-NEXT:    ld 4[r29],r31 ; 4-byte Folded Reload
 ; CHECK-NEXT:    nop

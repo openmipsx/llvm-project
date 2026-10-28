@@ -65,7 +65,7 @@ define void @far(ptr %p, i32 %n) {
 ; CHECK-NEXT:    st 0[r4],r21
 ; CHECK-NEXT:    st 0[r4],r22
 ; CHECK-NEXT:    st 0[r4],r25
-; CHECK-NEXT:    bgesq r2,r5,.LBB0_5
+; CHECK-NEXT:    bgesq r2,r5,.LBB0_2
 ; CHECK-NEXT:    ld 0[r29],r25
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:  ; %bb.3: ; %loop
@@ -73,9 +73,7 @@ define void @far(ptr %p, i32 %n) {
 ; CHECK-NEXT:    jspci r0,#%call(.LBB0_1),r0
 ; CHECK-NEXT:    nop
 ; CHECK-NEXT:    nop
-; CHECK-NEXT:  ; %bb.2: ; %exit
-; CHECK-NEXT:    ld 0[r29],r25 ; 4-byte Folded Reload
-; CHECK-NEXT:  .LBB0_5: ; %exit
+; CHECK-NEXT:  .LBB0_2: ; %exit
 ; CHECK-NEXT:    ld 4[r29],r22 ; 4-byte Folded Reload
 ; CHECK-NEXT:    ld 8[r29],r21 ; 4-byte Folded Reload
 ; CHECK-NEXT:    ld 12[r29],r20 ; 4-byte Folded Reload
