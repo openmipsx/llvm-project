@@ -48,6 +48,10 @@ public:
   StringRef getPassName() const override { return "MIPS-X Assembly Printer"; }
 
   void emitInstruction(const MachineInstr *MI) override;
+  bool PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
+                       const char *ExtraCode, raw_ostream &O) override;
+  bool PrintAsmMemoryOperand(const MachineInstr *MI, unsigned OpNo,
+                             const char *ExtraCode, raw_ostream &O) override;
 
 private:
   MCOperand lowerSymbolOperand(const MachineOperand &MO, MCSymbol *Sym,
@@ -158,6 +162,45 @@ void MIPSXAsmPrinter::lowerInstruction(const MachineInstr *MI,
     if (lowerOperand(MO, MCOp))
       OutMI.addOperand(MCOp);
   }
+}
+
+// Inline assembly operands. Registers print as rN and immediates as plain
+// numbers; the template writes the # of an immediate operand itself.
+bool MIPSXAsmPrinter::PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
+                                      const char *ExtraCode, raw_ostream &O) {
+  if (ExtraCode && ExtraCode[0])
+    return AsmPrinter::PrintAsmOperand(MI, OpNo, ExtraCode, O);
+
+  const MachineOperand &MO = MI->getOperand(OpNo);
+  switch (MO.getType()) {
+  case MachineOperand::MO_Register:
+    O << MIPSXInstPrinter::getRegisterName(MO.getReg());
+    return false;
+  case MachineOperand::MO_Immediate:
+    O << MO.getImm();
+    return false;
+  case MachineOperand::MO_MachineBasicBlock:
+    MO.getMBB()->getSymbol()->print(O, MAI);
+    return false;
+  default:
+    return AsmPrinter::PrintAsmOperand(MI, OpNo, ExtraCode, O);
+  }
+}
+
+// An "m" operand is a base register and an offset: off[rN].
+bool MIPSXAsmPrinter::PrintAsmMemoryOperand(const MachineInstr *MI,
+                                            unsigned OpNo,
+                                            const char *ExtraCode,
+                                            raw_ostream &O) {
+  if (ExtraCode && ExtraCode[0])
+    return true;
+  const MachineOperand &Base = MI->getOperand(OpNo);
+  const MachineOperand &Offset = MI->getOperand(OpNo + 1);
+  if (!Base.isReg() || !Offset.isImm())
+    return true;
+  O << Offset.getImm() << '[' << MIPSXInstPrinter::getRegisterName(Base.getReg())
+    << ']';
+  return false;
 }
 
 void MIPSXAsmPrinter::emitInstruction(const MachineInstr *MI) {

@@ -319,6 +319,60 @@ SDValue MIPSXTargetLowering::PerformDAGCombine(SDNode *N,
   return Res;
 }
 
+TargetLowering::ConstraintType
+MIPSXTargetLowering::getConstraintType(StringRef Constraint) const {
+  if (Constraint.size() == 1) {
+    switch (Constraint[0]) {
+    case 'r':
+      return C_RegisterClass;
+    case 'I':
+    case 'J':
+    case 'K':
+      return C_Immediate;
+    default:
+      break;
+    }
+  }
+  return TargetLowering::getConstraintType(Constraint);
+}
+
+std::pair<unsigned, const TargetRegisterClass *>
+MIPSXTargetLowering::getRegForInlineAsmConstraint(const TargetRegisterInfo *TRI,
+                                                  StringRef Constraint,
+                                                  MVT VT) const {
+  if (Constraint == "r")
+    return std::make_pair(0U, &MIPSX::GPRRegClass);
+  return TargetLowering::getRegForInlineAsmConstraint(TRI, Constraint, VT);
+}
+
+void MIPSXTargetLowering::LowerAsmOperandForConstraint(
+    SDValue Op, StringRef Constraint, std::vector<SDValue> &Ops,
+    SelectionDAG &DAG) const {
+  if (Constraint.size() == 1) {
+    auto *C = dyn_cast<ConstantSDNode>(Op);
+    bool Valid = false;
+    switch (Constraint[0]) {
+    case 'I':
+      Valid = C && isInt<17>(C->getSExtValue());
+      break;
+    case 'J':
+      Valid = C && C->isZero();
+      break;
+    case 'K':
+      Valid = C && C->getZExtValue() < 32;
+      break;
+    default:
+      return TargetLowering::LowerAsmOperandForConstraint(Op, Constraint, Ops,
+                                                          DAG);
+    }
+    if (Valid)
+      Ops.push_back(DAG.getSignedTargetConstant(C->getSExtValue(), SDLoc(Op),
+                                                Op.getValueType()));
+    return;
+  }
+  TargetLowering::LowerAsmOperandForConstraint(Op, Constraint, Ops, DAG);
+}
+
 unsigned MIPSXTargetLowering::getJumpTableEncoding() const {
   return MachineJumpTableInfo::EK_Custom32;
 }

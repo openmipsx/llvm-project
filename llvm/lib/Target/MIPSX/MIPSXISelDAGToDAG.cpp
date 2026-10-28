@@ -38,6 +38,9 @@ private:
 
   void Select(SDNode *N) override;
   bool selectAddrRegImm(SDValue Addr, SDValue &Base, SDValue &Offset);
+  bool SelectInlineAsmMemoryOperand(const SDValue &Op,
+                                    InlineAsm::ConstraintCode ConstraintID,
+                                    std::vector<SDValue> &OutOps) override;
 };
 
 class MIPSXDAGToDAGISelLegacy : public SelectionDAGISelLegacy {
@@ -86,6 +89,24 @@ bool MIPSXDAGToDAGISel::selectAddrRegImm(SDValue Addr, SDValue &Base,
   Base = AsBase(Addr);
   Offset = CurDAG->getTargetConstant(0, DL, MVT::i32);
   return true;
+}
+
+// An "m" operand is a base register and an offset, printed as off[rN].
+bool MIPSXDAGToDAGISel::SelectInlineAsmMemoryOperand(
+    const SDValue &Op, InlineAsm::ConstraintCode ConstraintID,
+    std::vector<SDValue> &OutOps) {
+  switch (ConstraintID) {
+  case InlineAsm::ConstraintCode::m:
+  case InlineAsm::ConstraintCode::o: {
+    SDValue Base, Offset;
+    selectAddrRegImm(Op, Base, Offset);
+    OutOps.push_back(Base);
+    OutOps.push_back(Offset);
+    return false;
+  }
+  default:
+    return true;
+  }
 }
 
 void MIPSXDAGToDAGISel::Select(SDNode *N) {
