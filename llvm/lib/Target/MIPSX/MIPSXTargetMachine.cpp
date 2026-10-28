@@ -60,6 +60,11 @@ public:
     return getTM<MIPSXTargetMachine>();
   }
 
+  void addIRPasses() override {
+    addPass(createAtomicExpandLegacyPass());
+    TargetPassConfig::addIRPasses();
+  }
+
   bool addInstSelector() override {
     addPass(createMIPSXISelDag(getMIPSXTargetMachine()));
     return false;

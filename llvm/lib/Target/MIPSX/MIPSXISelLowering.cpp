@@ -55,6 +55,11 @@ MIPSXTargetLowering::MIPSXTargetLowering(const TargetMachine &TM,
   setMinFunctionAlignment(Align(4));
   setPrefFunctionAlignment(Align(4));
 
+  // abi.md section 13.6: no atomic instructions. AtomicExpand turns every
+  // atomic operation into an __atomic_* call into the SDK; fences become
+  // MEMBARRIER, a compiler barrier (one CPU, in-order memory).
+  setMaxAtomicSizeInBitsSupported(0);
+
   setOperationAction(ISD::GlobalAddress, MVT::i32, Custom);
   setOperationAction(ISD::ExternalSymbol, MVT::i32, Custom);
   setOperationAction(ISD::JumpTable, MVT::i32, Custom);

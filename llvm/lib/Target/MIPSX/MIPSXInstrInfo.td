@@ -447,3 +447,7 @@ let Predicates = [HasES3890] in {
   def : StorePat<truncstorei8, STB>;
   def : StorePat<truncstorei16, STH>;
 }
+
+// A fence orders nothing in hardware (one CPU, in-order memory): it only
+// stops the compiler moving memory accesses across it.
+def : Pat<(atomic_fence timm, timm), (MEMBARRIER)>;

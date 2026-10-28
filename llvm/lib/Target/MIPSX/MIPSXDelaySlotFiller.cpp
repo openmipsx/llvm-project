@@ -216,8 +216,9 @@ unsigned MIPSXDelaySlotFiller::fillFromAbove(MachineBasicBlock &MBB,
     MachineInstr &MI = *I;
     if (MI.isDebugInstr())
       continue;
+    // Nothing moves across a barrier (MEMBARRIER, from a fence).
     if (MI.isBundled() || MI.hasDelaySlot() || MI.isInlineAsm() ||
-        MI.isPosition() || --Budget == 0)
+        MI.isPosition() || MI.hasUnmodeledSideEffects() || --Budget == 0)
       break;
 
     bool Movable = canBeInSlot(MI);
