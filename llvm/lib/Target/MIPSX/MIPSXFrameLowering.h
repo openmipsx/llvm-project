@@ -27,6 +27,13 @@ public:
   void emitPrologue(MachineFunction &MF, MachineBasicBlock &MBB) const override;
   void emitEpilogue(MachineFunction &MF, MachineBasicBlock &MBB) const override;
 
+  // The outgoing argument area is part of the fixed frame unless dynamic
+  // allocas move sp; a frame pointer alone does not. A realigned frame
+  // addresses its locals from sp, so sp must not move around calls there.
+  bool hasReservedCallFrame(const MachineFunction &MF) const override {
+    return !MF.getFrameInfo().hasVarSizedObjects();
+  }
+
   MachineBasicBlock::iterator
   eliminateCallFramePseudoInstr(MachineFunction &MF, MachineBasicBlock &MBB,
                                 MachineBasicBlock::iterator I) const override;

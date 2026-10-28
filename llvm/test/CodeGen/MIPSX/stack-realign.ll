@@ -67,3 +67,45 @@ define i32 @args(i32 %a0, i32 %a1, i32 %a2, i32 %a3, i32 %a4, i32 %a5,
   call void @g(ptr %x)
   ret i32 %a8
 }
+
+; With a realigned frame sp must not move around calls (the call frame is
+; reserved; only dynamic allocas unreserve it): the sret and stack
+; arguments are at the same sp-relative place as the locals expect.
+declare void @many(ptr sret([8 x i32]), i32, i32, i32, i32, i32, i32, i32, i32, ptr)
+
+define i32 @outgoing() {
+; CHECK-LABEL: outgoing:
+; CHECK:       ; %bb.0:
+; CHECK-NEXT:    addi r29,#-96,r29
+; CHECK-NEXT:    addi r0,#-32,r1
+; CHECK-NEXT:    st 88[r29],r30 ; 4-byte Folded Spill
+; CHECK-NEXT:    st 92[r29],r31 ; 4-byte Folded Spill
+; CHECK-NEXT:    addi r29,#96,r30
+; CHECK-NEXT:    and r29,r1,r29
+; CHECK-NEXT:    addi r29,#16,r2
+; CHECK-NEXT:    addi r29,#32,r4
+; CHECK-NEXT:    addi r0,#1,r6
+; CHECK-NEXT:    addi r0,#2,r7
+; CHECK-NEXT:    addi r0,#3,r8
+; CHECK-NEXT:    addi r0,#4,r9
+; CHECK-NEXT:    addi r0,#5,r10
+; CHECK-NEXT:    addi r0,#6,r11
+; CHECK-NEXT:    mov r0,r5
+; CHECK-NEXT:    st 4[r29],r2
+; CHECK-NEXT:    jspci r0,#%call(many),r31
+; CHECK-NEXT:    addi r0,#7,r2
+; CHECK-NEXT:    st 0[r29],r2
+; CHECK-NEXT:    ld 32[r29],r2
+; CHECK-NEXT:    addi r30,#-96,r29
+; CHECK-NEXT:    ld 92[r29],r31 ; 4-byte Folded Reload
+; CHECK-NEXT:    nop
+; CHECK-NEXT:    ret
+; CHECK-NEXT:    ld 88[r29],r30
+; CHECK-NEXT:    addi r29,#96,r29
+  %r = alloca [8 x i32], align 32
+  %x = alloca i32, align 16
+  call void @many(ptr sret([8 x i32]) %r, i32 0, i32 1, i32 2, i32 3, i32 4,
+                  i32 5, i32 6, i32 7, ptr %x)
+  %v = load i32, ptr %r
+  ret i32 %v
+}
