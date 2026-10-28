@@ -64,6 +64,8 @@ MIPSXTargetLowering::MIPSXTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::ExternalSymbol, MVT::i32, Custom);
   setOperationAction(ISD::JumpTable, MVT::i32, Custom);
   setOperationAction(ISD::BlockAddress, MVT::i32, Custom);
+  setOperationAction(ISD::FRAMEADDR, MVT::i32, Custom);
+  setOperationAction(ISD::RETURNADDR, MVT::i32, Custom);
 
   // Control flow: the six branch conditions compare two registers. setcc
   // and select become select_cc, which is a branch diamond.
@@ -146,6 +148,10 @@ SDValue MIPSXTargetLowering::LowerOperation(SDValue Op,
   case ISD::SRL:
   case ISD::SRA:
     return LowerShift(Op, DAG);
+  case ISD::FRAMEADDR:
+    return LowerFRAMEADDR(Op, DAG);
+  case ISD::RETURNADDR:
+    return LowerRETURNADDR(Op, DAG);
   default:
     llvm_unreachable("unimplemented operation lowering");
   }
@@ -255,6 +261,49 @@ SDValue MIPSXTargetLowering::LowerVAARG(SDValue Op, SelectionDAG &DAG) const {
 
 // One call to __udivsi3, which returns the quotient in r2 and the remainder
 // in r3: the same registers as a returned { i32, i32 }.
+// __builtin_frame_address: fp is the CFA, and the caller's fp is saved at
+// fp - 8 (MIPSXFrameLowering.cpp), so outer frames follow that chain.
+SDValue MIPSXTargetLowering::LowerFRAMEADDR(SDValue Op,
+                                            SelectionDAG &DAG) const {
+  MachineFrameInfo &MFI = DAG.getMachineFunction().getFrameInfo();
+  MFI.setFrameAddressIsTaken(true);
+  SDLoc DL(Op);
+  SDValue FrameAddr =
+      DAG.getCopyFromReg(DAG.getEntryNode(), DL, MIPSX::R30, MVT::i32);
+  for (unsigned Depth = Op.getConstantOperandVal(0); Depth; --Depth) {
+    SDValue Ptr = DAG.getNode(ISD::ADD, DL, MVT::i32, FrameAddr,
+                              DAG.getSignedConstant(-8, DL, MVT::i32));
+    FrameAddr =
+        DAG.getLoad(MVT::i32, DL, DAG.getEntryNode(), Ptr, MachinePointerInfo());
+  }
+  return FrameAddr;
+}
+
+// __builtin_return_address: r31 holds a word address (abi section 5.1); the
+// result is the byte address. Outer frames saved theirs at fp - 4.
+SDValue MIPSXTargetLowering::LowerRETURNADDR(SDValue Op,
+                                             SelectionDAG &DAG) const {
+  MachineFunction &MF = DAG.getMachineFunction();
+  MF.getFrameInfo().setReturnAddressIsTaken(true);
+  SDLoc DL(Op);
+  SDValue RA;
+  if (unsigned Depth = Op.getConstantOperandVal(0)) {
+    SDValue FrameAddr = LowerFRAMEADDR(
+        DAG.getNode(ISD::FRAMEADDR, DL, MVT::i32,
+                    DAG.getTargetConstant(Depth, DL, MVT::i32)),
+        DAG);
+    SDValue Ptr = DAG.getNode(ISD::ADD, DL, MVT::i32, FrameAddr,
+                              DAG.getSignedConstant(-4, DL, MVT::i32));
+    RA = DAG.getLoad(MVT::i32, DL, DAG.getEntryNode(), Ptr,
+                     MachinePointerInfo());
+  } else {
+    Register Reg = MF.addLiveIn(MIPSX::R31, &MIPSX::GPRRegClass);
+    RA = DAG.getCopyFromReg(DAG.getEntryNode(), DL, Reg, MVT::i32);
+  }
+  return DAG.getNode(ISD::SHL, DL, MVT::i32, RA,
+                     DAG.getConstant(2, DL, MVT::i32));
+}
+
 SDValue MIPSXTargetLowering::LowerUDIVREM(SDValue Op, SelectionDAG &DAG) const {
   SDLoc DL(Op);
   LLVMContext &Ctx = *DAG.getContext();

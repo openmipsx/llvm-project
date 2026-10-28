@@ -162,10 +162,15 @@ bool MIPSXFrameLowering::spillCalleeSavedRegisters(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MI,
     ArrayRef<CalleeSavedInfo> CSI, const TargetRegisterInfo *TRI) const {
   const MIPSXInstrInfo &TII = *STI.getInstrInfo();
+  const MachineRegisterInfo &MRI = MBB.getParent()->getRegInfo();
   for (const CalleeSavedInfo &CS : CSI) {
     MCRegister Reg = CS.getReg();
-    MBB.addLiveIn(Reg);
-    TII.storeRegToStackSlot(MBB, MI, Reg, /*IsKill=*/true, CS.getFrameIdx(),
+    // r31 is also a function live-in when __builtin_return_address reads
+    // it; then the spill must not kill it.
+    bool IsLiveIn = MRI.isLiveIn(Reg);
+    if (!IsLiveIn)
+      MBB.addLiveIn(Reg);
+    TII.storeRegToStackSlot(MBB, MI, Reg, /*IsKill=*/!IsLiveIn, CS.getFrameIdx(),
                             &MIPSX::GPRRegClass, Register(),
                             MachineInstr::FrameSetup);
   }
