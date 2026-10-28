@@ -4,6 +4,7 @@ set(LLVM_TARGET_DEFINITIONS MIPSX.td)
 
 tablegen(LLVM MIPSXGenAsmMatcher.inc -gen-asm-matcher)
 tablegen(LLVM MIPSXGenAsmWriter.inc -gen-asm-writer)
+tablegen(LLVM MIPSXGenDisassemblerTables.inc -gen-disassembler)
 tablegen(LLVM MIPSXGenInstrInfo.inc -gen-instr-info)
 tablegen(LLVM MIPSXGenMCCodeEmitter.inc -gen-emitter)
 tablegen(LLVM MIPSXGenRegisterInfo.inc -gen-register-info)
@@ -26,5 +27,6 @@ add_llvm_target(MIPSXCodeGen
   )
 
 add_subdirectory(AsmParser)
+add_subdirectory(Disassembler)
 add_subdirectory(MCTargetDesc)
 add_subdirectory(TargetInfo)

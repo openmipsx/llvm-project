@@ -1,0 +1,30 @@
+# The byte and halfword memory instructions decode only with the es3890
+# feature (the default CPU).
+# RUN: llvm-mc -triple=mipsx -disassemble %s | FileCheck %s
+# RUN: llvm-mc -triple=mipsx -mcpu=mipsx -disassemble %s 2>&1 >/dev/null \
+# RUN:   | FileCheck --check-prefix=MIPSX %s
+# RUN: llvm-mc -triple=mipsx -mcpu=mipsx -disassemble %s 2>/dev/null \
+# RUN:   | FileCheck --check-prefix=MIPSX-OUT %s
+
+0x80 0x44 0x00 0x00
+# CHECK: ld 0[r1],r2
+# MIPSX-OUT: ld 0[r1],r2
+# MIPSX-OUT-NOT: {{ld|st}}
+0xa0 0x44 0x00 0x01
+# CHECK: ldbu 1[r1],r2
+# MIPSX: [[@LINE-2]]:1: warning: invalid instruction encoding
+0xa8 0x44 0x00 0x01
+# CHECK: ldb 1[r1],r2
+# MIPSX: [[@LINE-2]]:1: warning: invalid instruction encoding
+0x88 0x44 0x00 0x02
+# CHECK: ldhu 2[r1],r2
+# MIPSX: [[@LINE-2]]:1: warning: invalid instruction encoding
+0xb8 0x44 0x00 0x02
+# CHECK: ldh 2[r1],r2
+# MIPSX: [[@LINE-2]]:1: warning: invalid instruction encoding
+0x98 0x44 0x00 0x01
+# CHECK: stb 1[r1],r2
+# MIPSX: [[@LINE-2]]:1: warning: invalid instruction encoding
+0xb0 0x44 0x00 0x02
+# CHECK: sth 2[r1],r2
+# MIPSX: [[@LINE-2]]:1: warning: invalid instruction encoding

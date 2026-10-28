@@ -1,0 +1,56 @@
+# Words that are not instructions are reported, and decoding goes on.
+# RUN: llvm-mc -triple=mipsx -disassemble %s 2>&1 >/dev/null | FileCheck %s
+# RUN: llvm-mc -triple=mipsx -disassemble %s 2>/dev/null \
+# RUN:   | FileCheck --check-prefix=OUT %s
+
+# Only the one valid word is printed.
+# OUT-NOT: {{[a-z]}}
+
+# branch with condition 000
+0x00 0x00 0x00 0x00
+# CHECK: [[@LINE-1]]:1: warning: invalid instruction encoding
+# branch with condition 100
+0x20 0x44 0x00 0x05
+# CHECK: [[@LINE-1]]:1: warning: invalid instruction encoding
+# compute, OP 100, unknown function 0
+0x60 0x44 0x30 0x00
+# CHECK: [[@LINE-1]]:1: warning: invalid instruction encoding
+# not with a non-zero Src2 field
+0x60 0x48 0x30 0x0f
+# CHECK: [[@LINE-1]]:1: warning: invalid instruction encoding
+# sh whose dddd field is not one-hot
+0x48 0xc8 0x52 0x03
+# CHECK: [[@LINE-1]]:1: warning: invalid instruction encoding
+# sh whose dddd field is zero
+0x48 0xc8 0x52 0x00
+# CHECK: [[@LINE-1]]:1: warning: invalid instruction encoding
+# movfrs with special register 3
+0xd8 0x00 0x10 0x03
+# CHECK: [[@LINE-1]]:1: warning: invalid instruction encoding
+# movfrs with a non-zero Src1 field
+0xd8 0x40 0x10 0x01
+# CHECK: [[@LINE-1]]:1: warning: invalid instruction encoding
+# movtos with special register 0
+0xd0 0x40 0x00 0x00
+# CHECK: [[@LINE-1]]:1: warning: invalid instruction encoding
+# jpc with the wrong function field
+0xe8 0x00 0x00 0x04
+# CHECK: [[@LINE-1]]:1: warning: invalid instruction encoding
+# trap with bit 11 set
+0xf0 0x00 0x08 0x03
+# CHECK: [[@LINE-1]]:1: warning: invalid instruction encoding
+# OP 001 that is not hsc
+0xc8 0x00 0x00 0x00
+# CHECK: [[@LINE-1]]:1: warning: invalid instruction encoding
+# hsc with a non-zero low field
+0xcf 0xc0 0x00 0x01
+# CHECK: [[@LINE-1]]:1: warning: invalid instruction encoding
+
+# A valid word after the invalid ones still decodes.
+0x60 0x00 0x00 0x19
+# OUT: nop
+# OUT-NOT: {{[a-z]}}
+
+# A trailing partial word.
+0x60 0x00
+# CHECK: [[@LINE-1]]:1: warning: invalid instruction encoding
