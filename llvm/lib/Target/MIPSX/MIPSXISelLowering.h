@@ -25,6 +25,16 @@ public:
   SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
   SDValue PerformDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const override;
 
+  // Comparisons give an i32 0 or 1; vector comparisons (GCC vector
+  // extensions, split into scalars) a vector of integers as wide as the
+  // operands.
+  EVT getSetCCResultType(const DataLayout &DL, LLVMContext &Context,
+                         EVT VT) const override {
+    if (VT.isVector())
+      return VT.changeVectorElementTypeToInteger();
+    return MVT::i32;
+  }
+
   // %hi/%lo relocations carry an addend, so sym+offset is one address.
   bool isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const override {
     return true;
