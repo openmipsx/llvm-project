@@ -130,6 +130,12 @@ def AddrRegImm : ComplexPattern<iPTR, 2, "selectAddrRegImm", [frameindex], []>;
 //===----------------------------------------------------------------------===//
 
 def LD : FLoad<0b000, "ld", memoff17>;
+// Spill reloads (loadRegFromStackSlot): ld without FLoad's early-clobber,
+// which the spiller does not model (it gives reloads a normal def slot, so
+// an early-clobber reload corrupts live intervals). Frame accesses use sp,
+// fp or r1 as the base, which are reserved, so P2 holds anyway.
+let isCodeGenOnly = 1, hasSideEffects = 0, Constraints = "" in
+def LDfi : FLoad<0b000, "ld", memoff17>;
 def ST : FStore<0b010, "st", memoff17>;
 
 // The ES3890 reuses the manual's coprocessor and floating-point memory

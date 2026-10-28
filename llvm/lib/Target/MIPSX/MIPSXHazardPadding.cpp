@@ -19,7 +19,8 @@
 //   target, a call or a return (section 9.2) and layout order is enough.
 //
 // P2 (a load must not overwrite its address register) is ensured by an
-// early-clobber constraint on load destinations. The code generator does not
+// early-clobber constraint on load destinations; spill reloads (LDfi) use
+// reserved base registers instead. The code generator does not
 // emit the MD instructions (P4).
 //
 //===----------------------------------------------------------------------===//

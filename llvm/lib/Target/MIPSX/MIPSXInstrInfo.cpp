@@ -78,7 +78,7 @@ void MIPSXInstrInfo::loadRegFromStackSlot(
   if (!MIPSX::GPRRegClass.hasSubClassEq(RC))
     llvm_unreachable("Can't load this register from a stack slot");
   DebugLoc DL = I != MBB.end() ? I->getDebugLoc() : DebugLoc();
-  BuildMI(MBB, I, DL, get(MIPSX::LD), DestReg)
+  BuildMI(MBB, I, DL, get(MIPSX::LDfi), DestReg)
       .addFrameIndex(FrameIndex)
       .addImm(0)
       .addMemOperand(
@@ -88,7 +88,8 @@ void MIPSXInstrInfo::loadRegFromStackSlot(
 
 Register MIPSXInstrInfo::isLoadFromStackSlot(const MachineInstr &MI,
                                              int &FrameIndex) const {
-  if (MI.getOpcode() == MIPSX::LD && MI.getOperand(1).isFI() &&
+  if ((MI.getOpcode() == MIPSX::LD || MI.getOpcode() == MIPSX::LDfi) &&
+      MI.getOperand(1).isFI() &&
       MI.getOperand(2).isImm() && MI.getOperand(2).getImm() == 0) {
     FrameIndex = MI.getOperand(1).getIndex();
     return MI.getOperand(0).getReg();
