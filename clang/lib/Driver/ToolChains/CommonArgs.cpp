@@ -21,6 +21,7 @@
 #include "Arch/X86.h"
 #include "HIPAMD.h"
 #include "Hexagon.h"
+#include "MIPSX.h"
 #include "MSP430.h"
 #include "Solaris.h"
 #include "ToolChains/Cuda.h"
@@ -121,6 +122,7 @@ static bool useFramePointerForTargetByDefault(const llvm::opt::ArgList &Args,
   case llvm::Triple::mips64el:
   case llvm::Triple::mips:
   case llvm::Triple::mipsel:
+  case llvm::Triple::mipsx:
     return !clang::driver::tools::areOptimizationsEnabled(Args);
   default:
     break;
@@ -821,6 +823,11 @@ std::string tools::getCPUName(const Driver &D, const ArgList &Args,
   case llvm::Triple::lanai:
     return getLanaiTargetCPU(Args);
 
+  case llvm::Triple::mipsx:
+    if (const Arg *A = Args.getLastArg(options::OPT_mcpu_EQ))
+      return A->getValue();
+    return "es3890";
+
   case llvm::Triple::systemz:
     return systemz::getSystemZTargetCPU(Args, T);
 
@@ -919,6 +926,9 @@ void tools::getTargetFeatures(const Driver &D, const llvm::Triple &Triple,
     break;
   case llvm::Triple::msp430:
     msp430::getMSP430TargetFeatures(D, Args, Features);
+    break;
+  case llvm::Triple::mipsx:
+    mipsx::getMIPSXTargetFeatures(D, Args, Features);
     break;
   case llvm::Triple::ve:
     ve::getVETargetFeatures(D, Args, Features);

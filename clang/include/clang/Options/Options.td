@@ -5481,6 +5481,8 @@ def mguard_EQ : Joined<["-"], "mguard=">, Group<m_Group>,
   Values<"none,cf,cf-nochecks">;
 def mmcu_EQ : Joined<["-"], "mmcu=">, Group<m_Group>;
 def msim : Flag<["-"], "msim">, Group<m_Group>;
+def mboard_EQ : Joined<["-"], "mboard=">, Group<m_Group>, Values<"sim,device">,
+  HelpText<"Link for a board: the simulator (sim, default) or the device (device). MIPS-X only">;
 def mfix_and_continue : Flag<["-"], "mfix-and-continue">, Group<clang_ignored_m_Group>;
 def mieee_fp : Flag<["-"], "mieee-fp">, Group<clang_ignored_m_Group>;
 def minline_all_stringops : Flag<["-"], "minline-all-stringops">, Group<clang_ignored_m_Group>;

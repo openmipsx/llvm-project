@@ -30,6 +30,7 @@
 #include "ToolChains/Hurd.h"
 #include "ToolChains/LFILinux.h"
 #include "ToolChains/Lanai.h"
+#include "ToolChains/MIPSX.h"
 #include "ToolChains/Linux.h"
 #include "ToolChains/MSP430.h"
 #include "ToolChains/MSVC.h"
@@ -7273,6 +7274,9 @@ const ToolChain &Driver::getToolChain(const ArgList &Args,
         break;
       case llvm::Triple::lanai:
         TC = std::make_unique<toolchains::LanaiToolChain>(*this, Target, Args);
+        break;
+      case llvm::Triple::mipsx:
+        TC = std::make_unique<toolchains::MIPSXToolChain>(*this, Target, Args);
         break;
       case llvm::Triple::xcore:
         TC = std::make_unique<toolchains::XCoreToolChain>(*this, Target, Args);
