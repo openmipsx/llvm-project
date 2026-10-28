@@ -27,6 +27,10 @@ public:
   void emitPrologue(MachineFunction &MF, MachineBasicBlock &MBB) const override;
   void emitEpilogue(MachineFunction &MF, MachineBasicBlock &MBB) const override;
 
+  // The base register and offset of a frame object in the function body.
+  StackOffset getFrameIndexReference(const MachineFunction &MF, int FI,
+                                     Register &FrameReg) const override;
+
   // The outgoing argument area is part of the fixed frame unless dynamic
   // allocas move sp; a frame pointer alone does not. A realigned frame
   // addresses its locals from sp, so sp must not move around calls there.

@@ -119,6 +119,23 @@ void MIPSXFrameLowering::emitEpilogue(MachineFunction &MF,
                 MachineInstr::FrameDestroy);
 }
 
+StackOffset
+MIPSXFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
+                                           Register &FrameReg) const {
+  // The body addresses the frame from fp = CFA when there is one, except
+  // that a realigned frame addresses its non-fixed objects from the aligned
+  // sp.
+  const MachineFrameInfo &MFI = MF.getFrameInfo();
+  int64_t Offset = MFI.getObjectOffset(FI);
+  if (hasFP(MF) && !(STI.getRegisterInfo()->hasStackRealignment(MF) &&
+                     !MFI.isFixedObjectIndex(FI))) {
+    FrameReg = MIPSX::R30;
+    return StackOffset::getFixed(Offset);
+  }
+  FrameReg = MIPSX::R29;
+  return StackOffset::getFixed(Offset + MFI.getStackSize());
+}
+
 MachineBasicBlock::iterator MIPSXFrameLowering::eliminateCallFramePseudoInstr(
     MachineFunction &MF, MachineBasicBlock &MBB,
     MachineBasicBlock::iterator I) const {
