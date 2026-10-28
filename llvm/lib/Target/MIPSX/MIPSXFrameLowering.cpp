@@ -7,13 +7,17 @@
 //===----------------------------------------------------------------------===//
 //
 // Stack frame of MIPS-X SDK docs/abi.md section 8: the stack grows down, sp
-// is 8-byte aligned, the outgoing argument area is at sp + 0 and reserved in
-// the prologue, so sp does not move around calls. The prologue is a single
-// "addi sp,#-size,sp" (through r1 for large frames); callee-saved registers,
-// including r31 in functions that make calls, are saved by the generic
-// spill code.
+// is 8-byte aligned, and the outgoing argument area is at sp + 0. Without
+// dynamic allocas the call frame is reserved in the prologue, so sp does not
+// move around calls; with them, each call adjusts sp around itself.
 //
-// TODO (work package S10): frame pointer, dynamic allocas, CFI.
+// The prologue is "addi sp,#-size,sp" (through r1 for large frames) and the
+// callee-saved stores. A function with a frame pointer then sets fp = sp +
+// size, the CFA, and addresses its frame from fp; r31 and the caller's r30
+// are at fp - 4 and fp - 8, so frames form a chain. Its epilogue resets sp
+// from fp before restoring registers.
+//
+// TODO (work package S17): CFI.
 //
 //===----------------------------------------------------------------------===//
 
@@ -25,30 +29,42 @@
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
+#include "llvm/Target/TargetMachine.h"
 #include "llvm/Support/ErrorHandling.h"
 
 using namespace llvm;
 
 bool MIPSXFrameLowering::hasFPImpl(const MachineFunction &MF) const {
-  return MF.getFrameInfo().hasVarSizedObjects();
+  const MachineFrameInfo &MFI = MF.getFrameInfo();
+  return MFI.hasVarSizedObjects() || MFI.isFrameAddressTaken() ||
+         MF.getTarget().Options.DisableFramePointerElim(MF);
 }
 
 void MIPSXFrameLowering::emitPrologue(MachineFunction &MF,
                                       MachineBasicBlock &MBB) const {
   MachineFrameInfo &MFI = MF.getFrameInfo();
-  if (MFI.hasVarSizedObjects())
-    report_fatal_error("MIPS-X: dynamic stack allocation is not supported yet");
+  if (MFI.getMaxAlign() > getStackAlign())
+    report_fatal_error("MIPS-X: stack objects aligned beyond 8 bytes are not "
+                       "supported");
 
   uint64_t StackSize = alignTo(MFI.getStackSize(), getStackAlign());
   MFI.setStackSize(StackSize);
   if (StackSize == 0)
     return;
 
+  const MIPSXInstrInfo &TII = *STI.getInstrInfo();
   MachineBasicBlock::iterator I = MBB.begin();
   DebugLoc DL = I != MBB.end() ? I->getDebugLoc() : DebugLoc();
-  STI.getInstrInfo()->adjustReg(MBB, I, DL, MIPSX::R29, MIPSX::R29,
-                                -int64_t(StackSize),
-                                MachineInstr::FrameSetup);
+  TII.adjustReg(MBB, I, DL, MIPSX::R29, MIPSX::R29, -int64_t(StackSize),
+                MachineInstr::FrameSetup);
+
+  if (!hasFP(MF))
+    return;
+  // fp = CFA, after the callee-saved stores (which save the caller's fp).
+  while (I != MBB.end() && I->getFlag(MachineInstr::FrameSetup))
+    ++I;
+  TII.adjustReg(MBB, I, DL, MIPSX::R30, MIPSX::R29, int64_t(StackSize),
+                MachineInstr::FrameSetup);
 }
 
 void MIPSXFrameLowering::emitEpilogue(MachineFunction &MF,
@@ -57,17 +73,40 @@ void MIPSXFrameLowering::emitEpilogue(MachineFunction &MF,
   if (StackSize == 0)
     return;
 
+  const MIPSXInstrInfo &TII = *STI.getInstrInfo();
   MachineBasicBlock::iterator I = MBB.getFirstTerminator();
   DebugLoc DL = I != MBB.end() ? I->getDebugLoc() : DebugLoc();
-  STI.getInstrInfo()->adjustReg(MBB, I, DL, MIPSX::R29, MIPSX::R29,
-                                int64_t(StackSize),
-                                MachineInstr::FrameDestroy);
+
+  if (hasFP(MF)) {
+    // sp may have moved (dynamic allocas): reset it from fp before the
+    // callee-saved restores, which address their slots from sp.
+    MachineBasicBlock::iterator R = I;
+    while (R != MBB.begin() &&
+           std::prev(R)->getFlag(MachineInstr::FrameDestroy))
+      --R;
+    TII.adjustReg(MBB, R, DL, MIPSX::R29, MIPSX::R30, -int64_t(StackSize),
+                  MachineInstr::FrameDestroy);
+  }
+
+  TII.adjustReg(MBB, I, DL, MIPSX::R29, MIPSX::R29, int64_t(StackSize),
+                MachineInstr::FrameDestroy);
 }
 
 MachineBasicBlock::iterator MIPSXFrameLowering::eliminateCallFramePseudoInstr(
-    MachineFunction & /*MF*/, MachineBasicBlock &MBB,
+    MachineFunction &MF, MachineBasicBlock &MBB,
     MachineBasicBlock::iterator I) const {
-  // The call frame is part of the fixed frame (hasReservedCallFrame).
+  // With a reserved call frame the outgoing area is part of the fixed frame;
+  // otherwise (dynamic allocas) sp moves around the call.
+  if (!hasReservedCallFrame(MF)) {
+    int64_t Amount = alignTo(I->getOperand(0).getImm(), getStackAlign());
+    if (Amount != 0) {
+      if (I->getOpcode() == MIPSX::ADJCALLSTACKDOWN)
+        Amount = -Amount;
+      STI.getInstrInfo()->adjustReg(MBB, I, I->getDebugLoc(), MIPSX::R29,
+                                    MIPSX::R29, Amount,
+                                    MachineInstr::NoFlags);
+    }
+  }
   return MBB.erase(I);
 }
 
@@ -75,7 +114,44 @@ void MIPSXFrameLowering::determineCalleeSaves(MachineFunction &MF,
                                               BitVector &SavedRegs,
                                               RegScavenger *RS) const {
   TargetFrameLowering::determineCalleeSaves(MF, SavedRegs, RS);
-  // A call overwrites r31, the return address.
+  // A call overwrites r31, the return address. A frame pointer saves the
+  // caller's, and the return address beside it.
   if (MF.getFrameInfo().hasCalls())
     SavedRegs.set(MIPSX::R31);
+  if (hasFP(MF)) {
+    SavedRegs.set(MIPSX::R30);
+    SavedRegs.set(MIPSX::R31);
+  }
+}
+
+const TargetFrameLowering::SpillSlot *
+MIPSXFrameLowering::getCalleeSavedSpillSlots(unsigned &NumEntries) const {
+  static const SpillSlot Offsets[] = {{MIPSX::R31, -4}, {MIPSX::R30, -8}};
+  NumEntries = std::size(Offsets);
+  return Offsets;
+}
+
+bool MIPSXFrameLowering::spillCalleeSavedRegisters(
+    MachineBasicBlock &MBB, MachineBasicBlock::iterator MI,
+    ArrayRef<CalleeSavedInfo> CSI, const TargetRegisterInfo *TRI) const {
+  const MIPSXInstrInfo &TII = *STI.getInstrInfo();
+  for (const CalleeSavedInfo &CS : CSI) {
+    MCRegister Reg = CS.getReg();
+    MBB.addLiveIn(Reg);
+    TII.storeRegToStackSlot(MBB, MI, Reg, /*IsKill=*/true, CS.getFrameIdx(),
+                            &MIPSX::GPRRegClass, Register(),
+                            MachineInstr::FrameSetup);
+  }
+  return true;
+}
+
+bool MIPSXFrameLowering::restoreCalleeSavedRegisters(
+    MachineBasicBlock &MBB, MachineBasicBlock::iterator MI,
+    MutableArrayRef<CalleeSavedInfo> CSI, const TargetRegisterInfo *TRI) const {
+  const MIPSXInstrInfo &TII = *STI.getInstrInfo();
+  for (const CalleeSavedInfo &CS : reverse(CSI))
+    TII.loadRegFromStackSlot(MBB, MI, CS.getReg(), CS.getFrameIdx(),
+                             &MIPSX::GPRRegClass, Register(), 0,
+                             MachineInstr::FrameDestroy);
+  return true;
 }

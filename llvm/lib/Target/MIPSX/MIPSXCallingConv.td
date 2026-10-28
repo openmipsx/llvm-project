@@ -50,3 +50,14 @@ def CSR_MIPSX_Umod : CalleeSavedRegs<(add (sequence "R%u", 4, 14),
 // __divsi3, __modsi3: change r1-r5, r12, r13, r15 (and MD).
 def CSR_MIPSX_Div : CalleeSavedRegs<(add (sequence "R%u", 6, 11), R14,
                                          (sequence "R%u", 16, 30))>;
+// __ashldi3, __lshrdi3, __ashrdi3: change r1-r5.
+def CSR_MIPSX_Shift64 : CalleeSavedRegs<(add (sequence "R%u", 6, 30))>;
+// __muldi3: changes r1-r5, r8-r15 (and MD).
+def CSR_MIPSX_Mul64 : CalleeSavedRegs<(add R6, R7, (sequence "R%u", 16, 30))>;
+// __udivdi3: changes r1-r11 (and MD).
+def CSR_MIPSX_Udiv64 : CalleeSavedRegs<(add (sequence "R%u", 12, 30))>;
+// __umoddi3: changes r1-r11, r15 (and MD).
+def CSR_MIPSX_Umod64 : CalleeSavedRegs<(add R12, R13, R14,
+                                            (sequence "R%u", 16, 30))>;
+// __divdi3, __moddi3: change r1-r13, r15 (and MD).
+def CSR_MIPSX_Div64 : CalleeSavedRegs<(add R14, (sequence "R%u", 16, 30))>;

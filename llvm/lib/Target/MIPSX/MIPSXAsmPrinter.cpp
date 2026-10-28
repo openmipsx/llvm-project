@@ -134,6 +134,13 @@ void MIPSXAsmPrinter::lowerInstruction(const MachineInstr *MI,
                 .addOperand(lowerSymbolOperand(Target, Sym, MIPSX::S_CALL));
     return;
   }
+  case MIPSX::CALLR:
+    // jspci rs,#0,r31
+    OutMI = MCInstBuilder(MIPSX::JSPCI)
+                .addReg(MIPSX::R31)
+                .addReg(MI->getOperand(0).getReg())
+                .addImm(0);
+    return;
   case MIPSX::RET:
     // jspci r31,#0,r0
     OutMI = MCInstBuilder(MIPSX::JSPCI)

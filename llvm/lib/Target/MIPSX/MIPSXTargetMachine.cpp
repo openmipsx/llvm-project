@@ -8,6 +8,7 @@
 
 #include "MIPSXTargetMachine.h"
 #include "MIPSX.h"
+#include "MIPSXMachineFunctionInfo.h"
 #include "TargetInfo/MIPSXTargetInfo.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
@@ -40,6 +41,13 @@ MIPSXTargetMachine::MIPSXTargetMachine(const Target &T, const Triple &TT,
 }
 
 MIPSXTargetMachine::~MIPSXTargetMachine() = default;
+
+MachineFunctionInfo *MIPSXTargetMachine::createMachineFunctionInfo(
+    BumpPtrAllocator &Allocator, const Function &F,
+    const TargetSubtargetInfo *STI) const {
+  return MIPSXMachineFunctionInfo::create<MIPSXMachineFunctionInfo>(Allocator,
+                                                                     F, STI);
+}
 
 namespace {
 class MIPSXPassConfig : public TargetPassConfig {

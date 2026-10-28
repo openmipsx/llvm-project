@@ -291,9 +291,17 @@ def CALL : Pseudo<(outs), (ins calltarget:$dst), []>;
 def : Pat<(MIPSXcall tglobaladdr:$dst), (CALL tglobaladdr:$dst)>;
 def : Pat<(MIPSXcall texternalsym:$dst), (CALL texternalsym:$dst)>;
 
-// Return, emitted as jspci r31,#0,r0.
-let isReturn = 1, isTerminator = 1, isBarrier = 1, hasDelaySlot = 1,
-    Uses = [R31] in
+// An indirect call to the word address in rs, emitted as jspci rs,#0,r31.
+// Function pointers are byte addresses, so the selected code shifts right
+// by 2 first (abi section 5.6).
+let isCall = 1, hasDelaySlot = 1, Defs = [R31], Uses = [R29] in
+def CALLR : Pseudo<(outs), (ins GPR:$rs), []>;
+def : Pat<(MIPSXcall GPR:$fn), (CALLR (SH GPR:$fn, R0, 2))>;
+
+// Return, emitted as jspci r31,#0,r0. r31 is not an implicit use: it is in
+// the callee-saved list, so if register allocation uses it the prologue saves
+// and the epilogue restores it (as RISC-V does with ra).
+let isReturn = 1, isTerminator = 1, isBarrier = 1, hasDelaySlot = 1 in
 def RET : Pseudo<(outs), (ins), [(MIPSXret)]>;
 
 // Unconditional branch: beq r0,r0,label, marked as a barrier.

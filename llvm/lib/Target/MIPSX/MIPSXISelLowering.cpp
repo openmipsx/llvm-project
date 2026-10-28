@@ -16,6 +16,7 @@
 #include "MCTargetDesc/MIPSXMCAsmInfo.h"
 #include "MCTargetDesc/MIPSXMCTargetDesc.h"
 #include "MIPSXInstrInfo.h"
+#include "MIPSXMachineFunctionInfo.h"
 #include "MIPSXSelectionDAGInfo.h"
 #include "MIPSXSubtarget.h"
 #include "llvm/CodeGen/CallingConvLower.h"
@@ -61,6 +62,19 @@ MIPSXTargetLowering::MIPSXTargetLowering(const TargetMachine &TM,
   setOperationAction(ISD::SELECT_CC, MVT::i32, Custom);
   setOperationAction(ISD::BR_JT, MVT::Other, Custom);
 
+  // Dynamic allocas: sp moves, and calls then adjust sp around themselves.
+  setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::i32, Expand);
+  setOperationAction(ISD::STACKSAVE, MVT::Other, Expand);
+  setOperationAction(ISD::STACKRESTORE, MVT::Other, Expand);
+
+  // Variadic arguments are on the stack; va_list is a char * (abi section
+  // 7.2).
+  setOperationAction(ISD::VASTART, MVT::Other, Custom);
+  setOperationAction(ISD::VAARG, MVT::Other, Custom);
+  setOperationAction(ISD::VACOPY, MVT::Other, Expand);
+  setOperationAction(ISD::VAEND, MVT::Other, Expand);
+  setMinStackArgumentAlignment(Align(4));
+
   // Shifts by a constant are sh and asr; variable shifts call the SDK
   // helpers __ashlsi3, __lshrsi3 and __ashrsi3.
   for (unsigned Op : {ISD::SHL, ISD::SRL, ISD::SRA})
@@ -104,6 +118,10 @@ SDValue MIPSXTargetLowering::LowerOperation(SDValue Op,
     return LowerSELECT_CC(Op, DAG);
   case ISD::BR_JT:
     return LowerBR_JT(Op, DAG);
+  case ISD::VASTART:
+    return LowerVASTART(Op, DAG);
+  case ISD::VAARG:
+    return LowerVAARG(Op, DAG);
   case ISD::SHL:
   case ISD::SRL:
   case ISD::SRA:
@@ -183,6 +201,36 @@ SDValue MIPSXTargetLowering::LowerBR_JT(SDValue Op, SelectionDAG &DAG) const {
       MachinePointerInfo::getJumpTable(DAG.getMachineFunction()));
   return DAG.getNode(MIPSXISD::BRIND_W, DL, MVT::Other, Target.getValue(1),
                      Target);
+}
+
+// va_start stores the address of the first variadic word.
+SDValue MIPSXTargetLowering::LowerVASTART(SDValue Op, SelectionDAG &DAG) const {
+  MachineFunction &MF = DAG.getMachineFunction();
+  auto *FuncInfo = MF.getInfo<MIPSXMachineFunctionInfo>();
+  SDLoc DL(Op);
+  SDValue FI = DAG.getFrameIndex(FuncInfo->getVarArgsFrameIndex(), MVT::i32);
+  const Value *SV = cast<SrcValueSDNode>(Op.getOperand(2))->getValue();
+  return DAG.getStore(Op.getOperand(0), DL, FI, Op.getOperand(1),
+                      MachinePointerInfo(SV));
+}
+
+// va_arg reads the next 4-byte word, whatever the alignment of the type: an
+// i64 or double is two consecutive words with no padding (abi section 7.2).
+// The type legaliser has already split 64-bit types into words.
+SDValue MIPSXTargetLowering::LowerVAARG(SDValue Op, SelectionDAG &DAG) const {
+  SDLoc DL(Op);
+  SDValue Chain = Op.getOperand(0);
+  SDValue ListPtr = Op.getOperand(1);
+  const Value *SV = cast<SrcValueSDNode>(Op.getOperand(2))->getValue();
+  EVT VT = Op.getValueType();
+  assert(VT == MVT::i32 && "Unexpected va_arg type");
+
+  SDValue Ap = DAG.getLoad(MVT::i32, DL, Chain, ListPtr, MachinePointerInfo(SV));
+  SDValue Next = DAG.getNode(ISD::ADD, DL, MVT::i32, Ap,
+                             DAG.getConstant(4, DL, MVT::i32));
+  Chain = DAG.getStore(Ap.getValue(1), DL, Next, ListPtr,
+                       MachinePointerInfo(SV));
+  return DAG.getLoad(VT, DL, Chain, Ap, MachinePointerInfo());
 }
 
 unsigned MIPSXTargetLowering::getJumpTableEncoding() const {
@@ -318,9 +366,6 @@ SDValue MIPSXTargetLowering::LowerFormalArguments(
   MachineFrameInfo &MFI = MF.getFrameInfo();
   MachineRegisterInfo &RegInfo = MF.getRegInfo();
 
-  if (IsVarArg)
-    report_fatal_error("MIPS-X: variadic functions are not supported yet");
-
   SmallVector<CCValAssign, 16> ArgLocs;
   CCState CCInfo(CallConv, IsVarArg, MF, ArgLocs, *DAG.getContext());
   CCInfo.AnalyzeFormalArguments(Ins, CC_MIPSX);
@@ -352,6 +397,11 @@ SDValue MIPSXTargetLowering::LowerFormalArguments(
       ArgValue = DAG.getNode(ISD::TRUNCATE, DL, VA.getValVT(), ArgValue);
     InVals.push_back(ArgValue);
   }
+
+  // The variadic words follow the named stack words (abi section 7.2).
+  if (IsVarArg)
+    MF.getInfo<MIPSXMachineFunctionInfo>()->setVarArgsFrameIndex(
+        MFI.CreateFixedObject(4, CCInfo.getStackSize(), /*IsImmutable=*/true));
   return Chain;
 }
 
@@ -425,6 +475,8 @@ SDValue MIPSXTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   // Tail calls arrive in work package S10.
   CLI.IsTailCall = false;
 
+  // Large aggregates are passed by reference to a copy the caller makes
+  // (abi section 7.1); Clang does not use byval for MIPS-X.
   for (const ISD::OutputArg &Out : Outs)
     if (Out.Flags.isByVal())
       report_fatal_error("MIPS-X: byval arguments are not supported");
@@ -481,14 +533,22 @@ SDValue MIPSXTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
     Glue = Chain.getValue(1);
   }
 
-  // TODO (work package S10): indirect calls and -mlong-calls.
-  if (auto *G = dyn_cast<GlobalAddressSDNode>(Callee))
+  // Direct calls go through jspci and a linker-selected code base. With
+  // -mattr=+long-calls they take the full address instead, like an
+  // indirect call (abi section 5.4). Indirect calls have the callee's byte
+  // address in a register.
+  if (Subtarget.useLongCalls() && (isa<GlobalAddressSDNode>(Callee) ||
+                                   isa<ExternalSymbolSDNode>(Callee))) {
+    if (isa<GlobalAddressSDNode>(Callee))
+      Callee = LowerGlobalAddress(Callee, DAG);
+    else
+      Callee = LowerExternalSymbol(Callee, DAG);
+  } else if (auto *G = dyn_cast<GlobalAddressSDNode>(Callee)) {
     Callee = DAG.getTargetGlobalAddress(G->getGlobal(), DL, MVT::i32,
                                         G->getOffset());
-  else if (auto *S = dyn_cast<ExternalSymbolSDNode>(Callee))
+  } else if (auto *S = dyn_cast<ExternalSymbolSDNode>(Callee)) {
     Callee = DAG.getTargetExternalSymbol(S->getSymbol(), MVT::i32);
-  else
-    report_fatal_error("MIPS-X: indirect calls are not supported yet");
+  }
 
   SmallVector<SDValue, 8> Ops;
   Ops.push_back(Chain);

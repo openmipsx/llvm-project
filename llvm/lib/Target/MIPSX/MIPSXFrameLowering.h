@@ -34,6 +34,22 @@ public:
   void determineCalleeSaves(MachineFunction &MF, BitVector &SavedRegs,
                             RegScavenger *RS = nullptr) const override;
 
+  // r31 and r30 are saved at CFA - 4 and CFA - 8 (abi section 8.2).
+  const SpillSlot *
+  getCalleeSavedSpillSlots(unsigned &NumEntries) const override;
+
+  // The saves and restores are marked FrameSetup and FrameDestroy, so that
+  // their frame indices are resolved against sp, which is valid there.
+  bool spillCalleeSavedRegisters(MachineBasicBlock &MBB,
+                                 MachineBasicBlock::iterator MI,
+                                 ArrayRef<CalleeSavedInfo> CSI,
+                                 const TargetRegisterInfo *TRI) const override;
+  bool
+  restoreCalleeSavedRegisters(MachineBasicBlock &MBB,
+                              MachineBasicBlock::iterator MI,
+                              MutableArrayRef<CalleeSavedInfo> CSI,
+                              const TargetRegisterInfo *TRI) const override;
+
 protected:
   bool hasFPImpl(const MachineFunction &MF) const override;
 };

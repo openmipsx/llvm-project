@@ -49,6 +49,11 @@ MIPSXRegisterInfo::getHelperCallPreservedMask(StringRef Name) const {
       .Case("__ashlsi3", CSR_MIPSX_Ashl_RegMask)
       .Case("__umodsi3", CSR_MIPSX_Umod_RegMask)
       .Cases({"__divsi3", "__modsi3"}, CSR_MIPSX_Div_RegMask)
+      .Cases({"__ashldi3", "__lshrdi3", "__ashrdi3"}, CSR_MIPSX_Shift64_RegMask)
+      .Case("__muldi3", CSR_MIPSX_Mul64_RegMask)
+      .Case("__udivdi3", CSR_MIPSX_Udiv64_RegMask)
+      .Case("__umoddi3", CSR_MIPSX_Umod64_RegMask)
+      .Cases({"__divdi3", "__moddi3"}, CSR_MIPSX_Div64_RegMask)
       .Default(nullptr);
 }
 
@@ -65,9 +70,8 @@ BitVector MIPSXRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   return Reserved;
 }
 
-Register
-MIPSXRegisterInfo::getFrameRegister(const MachineFunction & /*MF*/) const {
-  return MIPSX::R29;
+Register MIPSXRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
+  return getFrameLowering(MF)->hasFP(MF) ? MIPSX::R30 : MIPSX::R29;
 }
 
 // Every instruction that takes a frame index (loads, stores and addi) has it
@@ -81,16 +85,25 @@ bool MIPSXRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   const MachineFrameInfo &MFI = MF.getFrameInfo();
 
   int FI = MI.getOperand(FIOperandNum).getIndex();
-  int64_t Offset = MFI.getObjectOffset(FI) + MFI.getStackSize() +
-                   MI.getOperand(FIOperandNum + 1).getImm();
+  int64_t Offset =
+      MFI.getObjectOffset(FI) + MI.getOperand(FIOperandNum + 1).getImm();
+  // With a frame pointer (fp = CFA) the body addresses the frame from fp,
+  // since sp moves with dynamic allocas; the prologue and epilogue use sp,
+  // which is valid there, so that restoring fp never loads through fp.
   Register Base = MIPSX::R29;
+  if (getFrameLowering(MF)->hasFP(MF) &&
+      !MI.getFlag(MachineInstr::FrameSetup) &&
+      !MI.getFlag(MachineInstr::FrameDestroy))
+    Base = MIPSX::R30;
+  else
+    Offset += MFI.getStackSize();
   if (!isInt<17>(Offset)) {
     // Compute sp + Offset in r1, which is reserved for this (abi section
     // 8.4).
     const auto &TII = *static_cast<const MIPSXInstrInfo *>(
         MF.getSubtarget().getInstrInfo());
-    TII.adjustReg(*MI.getParent(), II, MI.getDebugLoc(), MIPSX::R1,
-                  MIPSX::R29, Offset, MachineInstr::NoFlags);
+    TII.adjustReg(*MI.getParent(), II, MI.getDebugLoc(), MIPSX::R1, Base,
+                  Offset, MachineInstr::NoFlags);
     Base = MIPSX::R1;
     Offset = 0;
   }
