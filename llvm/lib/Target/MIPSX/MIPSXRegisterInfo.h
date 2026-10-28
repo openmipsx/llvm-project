@@ -24,6 +24,10 @@ struct MIPSXRegisterInfo : public MIPSXGenRegisterInfo {
                                        CallingConv::ID) const override;
   BitVector getReservedRegs(const MachineFunction &MF) const override;
 
+  /// The registers preserved by an SDK helper routine (__mulsi3 and so on),
+  /// or null if Name is not one with a known clobber list.
+  const uint32_t *getHelperCallPreservedMask(StringRef Name) const;
+
   bool eliminateFrameIndex(MachineBasicBlock::iterator II, int SPAdj,
                            unsigned FIOperandNum,
                            RegScavenger *RS = nullptr) const override;

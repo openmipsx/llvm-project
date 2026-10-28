@@ -13,6 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "MIPSXISelLowering.h"
+#include "MCTargetDesc/MIPSXMCAsmInfo.h"
 #include "MCTargetDesc/MIPSXMCTargetDesc.h"
 #include "MIPSXInstrInfo.h"
 #include "MIPSXSelectionDAGInfo.h"
@@ -20,9 +21,12 @@
 #include "llvm/CodeGen/CallingConvLower.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
+#include "llvm/CodeGen/MachineInstrBuilder.h"
+#include "llvm/CodeGen/MachineJumpTableInfo.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/IR/Function.h"
+#include "llvm/MC/MCExpr.h"
 #include "llvm/Support/ErrorHandling.h"
 
 using namespace llvm;
@@ -45,6 +49,22 @@ MIPSXTargetLowering::MIPSXTargetLowering(const TargetMachine &TM,
 
   setOperationAction(ISD::GlobalAddress, MVT::i32, Custom);
   setOperationAction(ISD::ExternalSymbol, MVT::i32, Custom);
+  setOperationAction(ISD::JumpTable, MVT::i32, Custom);
+  setOperationAction(ISD::BlockAddress, MVT::i32, Custom);
+
+  // Control flow: the six branch conditions compare two registers. setcc
+  // and select become select_cc, which is a branch diamond.
+  setOperationAction(ISD::BR_CC, MVT::i32, Legal);
+  setOperationAction(ISD::BRCOND, MVT::Other, Expand);
+  setOperationAction(ISD::SETCC, MVT::i32, Expand);
+  setOperationAction(ISD::SELECT, MVT::i32, Expand);
+  setOperationAction(ISD::SELECT_CC, MVT::i32, Custom);
+  setOperationAction(ISD::BR_JT, MVT::Other, Custom);
+
+  // Shifts by a constant are sh and asr; variable shifts call the SDK
+  // helpers __ashlsi3, __lshrsi3 and __ashrsi3.
+  for (unsigned Op : {ISD::SHL, ISD::SRL, ISD::SRA})
+    setOperationAction(Op, MVT::i32, Custom);
 
   // No multiply or divide instructions: library calls (work package S12
   // provides the routines).
@@ -67,8 +87,6 @@ MIPSXTargetLowering::MIPSXTargetLowering(const TargetMachine &TM,
   for (unsigned Ext : {ISD::EXTLOAD, ISD::ZEXTLOAD, ISD::SEXTLOAD})
     setLoadExtAction(Ext, MVT::i32, MVT::i1, Promote);
 
-  // TODO (work package S9): conditional branches, setcc, select, jump
-  // tables and variable shifts.
 }
 
 SDValue MIPSXTargetLowering::LowerOperation(SDValue Op,
@@ -78,6 +96,18 @@ SDValue MIPSXTargetLowering::LowerOperation(SDValue Op,
     return LowerGlobalAddress(Op, DAG);
   case ISD::ExternalSymbol:
     return LowerExternalSymbol(Op, DAG);
+  case ISD::JumpTable:
+    return LowerJumpTable(Op, DAG);
+  case ISD::BlockAddress:
+    return LowerBlockAddress(Op, DAG);
+  case ISD::SELECT_CC:
+    return LowerSELECT_CC(Op, DAG);
+  case ISD::BR_JT:
+    return LowerBR_JT(Op, DAG);
+  case ISD::SHL:
+  case ISD::SRL:
+  case ISD::SRA:
+    return LowerShift(Op, DAG);
   default:
     llvm_unreachable("unimplemented operation lowering");
   }
@@ -115,6 +145,169 @@ SDValue MIPSXTargetLowering::LowerExternalSymbol(SDValue Op,
   return buildHiLo(
       DAG, DL, DAG.getTargetExternalSymbol(Sym, MVT::i32, MIPSXII::MO_HI),
       DAG.getTargetExternalSymbol(Sym, MVT::i32, MIPSXII::MO_LO));
+}
+
+SDValue MIPSXTargetLowering::LowerJumpTable(SDValue Op,
+                                            SelectionDAG &DAG) const {
+  SDLoc DL(Op);
+  int JTI = cast<JumpTableSDNode>(Op)->getIndex();
+  return buildHiLo(DAG, DL,
+                   DAG.getTargetJumpTable(JTI, MVT::i32, MIPSXII::MO_HI),
+                   DAG.getTargetJumpTable(JTI, MVT::i32, MIPSXII::MO_LO));
+}
+
+SDValue MIPSXTargetLowering::LowerBlockAddress(SDValue Op,
+                                               SelectionDAG &DAG) const {
+  SDLoc DL(Op);
+  const auto *N = cast<BlockAddressSDNode>(Op);
+  const BlockAddress *BA = N->getBlockAddress();
+  int64_t Offset = N->getOffset();
+  return buildHiLo(
+      DAG, DL,
+      DAG.getTargetBlockAddress(BA, MVT::i32, Offset, MIPSXII::MO_HI),
+      DAG.getTargetBlockAddress(BA, MVT::i32, Offset, MIPSXII::MO_LO));
+}
+
+// Load the word-address entry and jump to it, with no shift (abi section
+// 5.6).
+SDValue MIPSXTargetLowering::LowerBR_JT(SDValue Op, SelectionDAG &DAG) const {
+  SDLoc DL(Op);
+  SDValue Chain = Op.getOperand(0);
+  SDValue Table = Op.getOperand(1);
+  SDValue Index = Op.getOperand(2);
+  SDValue Offset = DAG.getNode(ISD::SHL, DL, MVT::i32, Index,
+                               DAG.getConstant(2, DL, MVT::i32));
+  SDValue Addr = DAG.getNode(ISD::ADD, DL, MVT::i32, Table, Offset);
+  SDValue Target = DAG.getLoad(
+      MVT::i32, DL, Chain, Addr,
+      MachinePointerInfo::getJumpTable(DAG.getMachineFunction()));
+  return DAG.getNode(MIPSXISD::BRIND_W, DL, MVT::Other, Target.getValue(1),
+                     Target);
+}
+
+unsigned MIPSXTargetLowering::getJumpTableEncoding() const {
+  return MachineJumpTableInfo::EK_Custom32;
+}
+
+const MCExpr *MIPSXTargetLowering::LowerCustomJumpTableEntry(
+    const MachineJumpTableInfo * /*MJTI*/, const MachineBasicBlock *MBB,
+    unsigned /*UID*/, MCContext &Ctx) const {
+  return MCSpecifierExpr::create(MCSymbolRefExpr::create(MBB->getSymbol(), Ctx),
+                                 MIPSX::S_W, Ctx);
+}
+
+SDValue MIPSXTargetLowering::LowerSELECT_CC(SDValue Op,
+                                            SelectionDAG &DAG) const {
+  SDLoc DL(Op);
+  SDValue LHS = Op.getOperand(0), RHS = Op.getOperand(1);
+  SDValue TrueV = Op.getOperand(2), FalseV = Op.getOperand(3);
+  ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(4))->get();
+  return DAG.getNode(MIPSXISD::SELECT_CC, DL, Op.getValueType(), TrueV, FalseV,
+                     LHS, RHS, DAG.getTargetConstant(CC, DL, MVT::i32));
+}
+
+SDValue MIPSXTargetLowering::LowerShift(SDValue Op, SelectionDAG &DAG) const {
+  // Shifts by a constant have patterns.
+  if (isa<ConstantSDNode>(Op.getOperand(1)))
+    return Op;
+
+  RTLIB::Libcall LC;
+  switch (Op.getOpcode()) {
+  case ISD::SHL:
+    LC = RTLIB::SHL_I32;
+    break;
+  case ISD::SRL:
+    LC = RTLIB::SRL_I32;
+    break;
+  default:
+    LC = RTLIB::SRA_I32;
+    break;
+  }
+  SDValue Ops[2] = {Op.getOperand(0),
+                    DAG.getZExtOrTrunc(Op.getOperand(1), SDLoc(Op), MVT::i32)};
+  MakeLibCallOptions CallOptions;
+  return makeLibCall(DAG, LC, MVT::i32, Ops, CallOptions, SDLoc(Op)).first;
+}
+
+// The branch that is taken when (A CC B) holds; gt, le, ugt and ule swap
+// the operands (abi section 5.3).
+static unsigned getBranchOpcode(ISD::CondCode CC, bool &Swap) {
+  Swap = false;
+  switch (CC) {
+  case ISD::SETEQ:
+    return MIPSX::BEQ;
+  case ISD::SETNE:
+    return MIPSX::BNE;
+  case ISD::SETLT:
+    return MIPSX::BLT;
+  case ISD::SETGE:
+    return MIPSX::BGE;
+  case ISD::SETGT:
+    Swap = true;
+    return MIPSX::BLT;
+  case ISD::SETLE:
+    Swap = true;
+    return MIPSX::BGE;
+  case ISD::SETULT:
+    return MIPSX::BLO;
+  case ISD::SETUGE:
+    return MIPSX::BHS;
+  case ISD::SETUGT:
+    Swap = true;
+    return MIPSX::BLO;
+  case ISD::SETULE:
+    Swap = true;
+    return MIPSX::BHS;
+  default:
+    llvm_unreachable("Unexpected integer condition code");
+  }
+}
+
+// SELECT becomes
+//   ThisMBB:  b<cc> a,b,SinkMBB      (result is True if taken)
+//   FalseMBB: (falls through)
+//   SinkMBB:  rd = phi [True, ThisMBB], [False, FalseMBB]
+MachineBasicBlock *
+MIPSXTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
+                                                 MachineBasicBlock *BB) const {
+  assert(MI.getOpcode() == MIPSX::SELECT && "Unexpected instruction");
+  const TargetInstrInfo &TII = *Subtarget.getInstrInfo();
+  DebugLoc DL = MI.getDebugLoc();
+  MachineFunction *MF = BB->getParent();
+  const BasicBlock *LLVMBB = BB->getBasicBlock();
+  MachineFunction::iterator It = ++BB->getIterator();
+
+  MachineBasicBlock *ThisMBB = BB;
+  MachineBasicBlock *FalseMBB = MF->CreateMachineBasicBlock(LLVMBB);
+  MachineBasicBlock *SinkMBB = MF->CreateMachineBasicBlock(LLVMBB);
+  MF->insert(It, FalseMBB);
+  MF->insert(It, SinkMBB);
+
+  SinkMBB->splice(SinkMBB->begin(), BB,
+                  std::next(MachineBasicBlock::iterator(MI)), BB->end());
+  SinkMBB->transferSuccessorsAndUpdatePHIs(BB);
+  BB->addSuccessor(FalseMBB);
+  BB->addSuccessor(SinkMBB);
+  FalseMBB->addSuccessor(SinkMBB);
+
+  bool Swap;
+  unsigned Opc = getBranchOpcode(
+      static_cast<ISD::CondCode>(MI.getOperand(5).getImm()), Swap);
+  Register A = MI.getOperand(3).getReg(), B = MI.getOperand(4).getReg();
+  BuildMI(BB, DL, TII.get(Opc))
+      .addReg(Swap ? B : A)
+      .addReg(Swap ? A : B)
+      .addMBB(SinkMBB);
+
+  BuildMI(*SinkMBB, SinkMBB->begin(), DL, TII.get(MIPSX::PHI),
+          MI.getOperand(0).getReg())
+      .addReg(MI.getOperand(1).getReg())
+      .addMBB(ThisMBB)
+      .addReg(MI.getOperand(2).getReg())
+      .addMBB(FalseMBB);
+
+  MI.eraseFromParent();
+  return SinkMBB;
 }
 
 SDValue MIPSXTargetLowering::LowerFormalArguments(
@@ -302,8 +495,13 @@ SDValue MIPSXTargetLowering::LowerCall(TargetLowering::CallLoweringInfo &CLI,
   Ops.push_back(Callee);
   for (auto &[Reg, Val] : RegsToPass)
     Ops.push_back(DAG.getRegister(Reg, Val.getValueType()));
-  const uint32_t *Mask =
-      Subtarget.getRegisterInfo()->getCallPreservedMask(MF, CallConv);
+  // The SDK's helper routines clobber fewer registers than a normal call.
+  const MIPSXRegisterInfo *TRI = Subtarget.getRegisterInfo();
+  const uint32_t *Mask = nullptr;
+  if (auto *S = dyn_cast<ExternalSymbolSDNode>(Callee))
+    Mask = TRI->getHelperCallPreservedMask(S->getSymbol());
+  if (!Mask)
+    Mask = TRI->getCallPreservedMask(MF, CallConv);
   Ops.push_back(DAG.getRegisterMask(Mask));
   if (Glue.getNode())
     Ops.push_back(Glue);

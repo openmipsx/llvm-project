@@ -12,6 +12,8 @@
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineMemOperand.h"
+#include "llvm/Support/CommandLine.h"
+#include "llvm/Target/TargetMachine.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
 
@@ -19,6 +21,11 @@ using namespace llvm;
 
 #define GET_INSTRINFO_CTOR_DTOR
 #include "MIPSXGenInstrInfo.inc"
+
+// For testing branch relaxation without 128 KB functions.
+static cl::opt<unsigned> BranchDispBits(
+    "mipsx-branch-disp-bits", cl::Hidden, cl::init(16),
+    cl::desc("Bits of branch displacement assumed by branch relaxation"));
 
 MIPSXInstrInfo::MIPSXInstrInfo(const MIPSXSubtarget &STI)
     : MIPSXGenInstrInfo(STI, RI, MIPSX::ADJCALLSTACKDOWN,
@@ -130,4 +137,209 @@ void MIPSXInstrInfo::adjustReg(MachineBasicBlock &MBB,
       .addReg(Base)
       .addReg(MIPSX::R1)
       .setMIFlag(Flag);
+}
+
+static bool isCondBranch(unsigned Opc) {
+  switch (Opc) {
+  case MIPSX::BEQ:
+  case MIPSX::BNE:
+  case MIPSX::BLT:
+  case MIPSX::BGE:
+  case MIPSX::BLO:
+  case MIPSX::BHS:
+    return true;
+  default:
+    return false;
+  }
+}
+
+static void parseCondBranch(MachineInstr &MI, MachineBasicBlock *&Target,
+                            SmallVectorImpl<MachineOperand> &Cond) {
+  Target = MI.getOperand(2).getMBB();
+  Cond.push_back(MachineOperand::CreateImm(MI.getOpcode()));
+  Cond.push_back(MI.getOperand(0));
+  Cond.push_back(MI.getOperand(1));
+}
+
+bool MIPSXInstrInfo::analyzeBranch(MachineBasicBlock &MBB,
+                                   MachineBasicBlock *&TBB,
+                                   MachineBasicBlock *&FBB,
+                                   SmallVectorImpl<MachineOperand> &Cond,
+                                   bool AllowModify) const {
+  TBB = FBB = nullptr;
+  Cond.clear();
+
+  MachineBasicBlock::iterator I = MBB.getLastNonDebugInstr();
+  if (I == MBB.end() || !isUnpredicatedTerminator(*I))
+    return false;
+
+  // Count the terminators and find the first.
+  MachineBasicBlock::iterator FirstUncond = MBB.end();
+  int NumTerminators = 0;
+  for (auto J = I.getReverse(); J != MBB.rend() && isUnpredicatedTerminator(*J);
+       ++J) {
+    ++NumTerminators;
+    if (J->getDesc().isUnconditionalBranch() ||
+        J->getDesc().isIndirectBranch())
+      FirstUncond = J.getReverse();
+  }
+
+  // Delete anything after the first unconditional branch.
+  if (AllowModify && FirstUncond != MBB.end()) {
+    while (std::next(FirstUncond) != MBB.end()) {
+      std::next(FirstUncond)->eraseFromParent();
+      --NumTerminators;
+    }
+    I = FirstUncond;
+  }
+
+  // Indirect branches, returns and far jumps are not analysable.
+  if (I->getDesc().isIndirectBranch() || I->isReturn() ||
+      I->getOpcode() == MIPSX::JMP)
+    return true;
+
+  if (NumTerminators > 2)
+    return true;
+
+  if (NumTerminators == 1 && I->getOpcode() == MIPSX::B) {
+    TBB = I->getOperand(0).getMBB();
+    return false;
+  }
+  if (NumTerminators == 1 && isCondBranch(I->getOpcode())) {
+    parseCondBranch(*I, TBB, Cond);
+    return false;
+  }
+  if (NumTerminators == 2 && isCondBranch(std::prev(I)->getOpcode()) &&
+      I->getOpcode() == MIPSX::B) {
+    parseCondBranch(*std::prev(I), TBB, Cond);
+    FBB = I->getOperand(0).getMBB();
+    return false;
+  }
+  return true;
+}
+
+unsigned MIPSXInstrInfo::removeBranch(MachineBasicBlock &MBB,
+                                      int *BytesRemoved) const {
+  if (BytesRemoved)
+    *BytesRemoved = 0;
+  unsigned Count = 0;
+  MachineBasicBlock::iterator I = MBB.getLastNonDebugInstr();
+  while (I != MBB.end() &&
+         (I->getOpcode() == MIPSX::B || isCondBranch(I->getOpcode()))) {
+    if (BytesRemoved)
+      *BytesRemoved += getInstSizeInBytes(*I);
+    I->eraseFromParent();
+    ++Count;
+    I = MBB.getLastNonDebugInstr();
+  }
+  return Count;
+}
+
+unsigned MIPSXInstrInfo::insertBranch(MachineBasicBlock &MBB,
+                                      MachineBasicBlock *TBB,
+                                      MachineBasicBlock *FBB,
+                                      ArrayRef<MachineOperand> Cond,
+                                      const DebugLoc &DL,
+                                      int *BytesAdded) const {
+  assert(TBB && "insertBranch must not be told to insert a fallthrough");
+  unsigned Count = 0;
+  int Bytes = 0;
+  if (Cond.empty()) {
+    MachineInstr &MI = *BuildMI(&MBB, DL, get(MIPSX::B)).addMBB(TBB);
+    Bytes += getInstSizeInBytes(MI);
+    ++Count;
+  } else {
+    MachineInstr &MI = *BuildMI(&MBB, DL, get(Cond[0].getImm()))
+                            .add(Cond[1])
+                            .add(Cond[2])
+                            .addMBB(TBB);
+    Bytes += getInstSizeInBytes(MI);
+    ++Count;
+    if (FBB) {
+      MachineInstr &MI2 = *BuildMI(&MBB, DL, get(MIPSX::B)).addMBB(FBB);
+      Bytes += getInstSizeInBytes(MI2);
+      ++Count;
+    }
+  }
+  if (BytesAdded)
+    *BytesAdded = Bytes;
+  return Count;
+}
+
+bool MIPSXInstrInfo::reverseBranchCondition(
+    SmallVectorImpl<MachineOperand> &Cond) const {
+  unsigned Opc;
+  switch (Cond[0].getImm()) {
+  case MIPSX::BEQ:
+    Opc = MIPSX::BNE;
+    break;
+  case MIPSX::BNE:
+    Opc = MIPSX::BEQ;
+    break;
+  case MIPSX::BLT:
+    Opc = MIPSX::BGE;
+    break;
+  case MIPSX::BGE:
+    Opc = MIPSX::BLT;
+    break;
+  case MIPSX::BLO:
+    Opc = MIPSX::BHS;
+    break;
+  case MIPSX::BHS:
+    Opc = MIPSX::BLO;
+    break;
+  default:
+    return true;
+  }
+  Cond[0].setImm(Opc);
+  return false;
+}
+
+// Sizes include the nops MIPSXHazardPadding adds later: two after anything
+// with delay slots, one after a load.
+unsigned MIPSXInstrInfo::getInstSizeInBytes(const MachineInstr &MI) const {
+  if (MI.isMetaInstruction())
+    return 0;
+  if (MI.isInlineAsm()) {
+    const MachineFunction &MF = *MI.getParent()->getParent();
+    return getInlineAsmLength(MI.getOperand(0).getSymbolName(),
+                              MF.getTarget().getMCAsmInfo());
+  }
+  if (MI.hasDelaySlot())
+    return 12;
+  if (MI.mayLoad())
+    return 8;
+  return 4;
+}
+
+bool MIPSXInstrInfo::isBranchOffsetInRange(unsigned BranchOpc,
+                                           int64_t BrOffset) const {
+  if (BranchOpc == MIPSX::JMP)
+    return true; // Through a code base (abi section 5.2).
+  // Target word = branch word + 2 + displacement.
+  int64_t Disp = BrOffset / 4 - 2;
+  return isIntN(BranchDispBits, Disp);
+}
+
+MachineBasicBlock *
+MIPSXInstrInfo::getBranchDestBlock(const MachineInstr &MI) const {
+  switch (MI.getOpcode()) {
+  case MIPSX::B:
+  case MIPSX::JMP:
+    return MI.getOperand(0).getMBB();
+  default:
+    assert(isCondBranch(MI.getOpcode()) && "Not a branch");
+    return MI.getOperand(2).getMBB();
+  }
+}
+
+// A branch that cannot reach becomes jspci r0,#%call(label),r0, which needs
+// no scratch register (abi section 5.5).
+void MIPSXInstrInfo::insertIndirectBranch(MachineBasicBlock &MBB,
+                                          MachineBasicBlock &NewDestBB,
+                                          MachineBasicBlock & /*RestoreBB*/,
+                                          const DebugLoc &DL,
+                                          int64_t /*BrOffset*/,
+                                          RegScavenger * /*RS*/) const {
+  BuildMI(&MBB, DL, get(MIPSX::JMP)).addMBB(&NewDestBB, MIPSXII::MO_CALL);
 }

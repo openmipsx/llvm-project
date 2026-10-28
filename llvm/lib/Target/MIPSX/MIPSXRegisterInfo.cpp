@@ -15,6 +15,7 @@
 #include "MIPSXFrameLowering.h"
 #include "MIPSXInstrInfo.h"
 #include "llvm/ADT/BitVector.h"
+#include "llvm/ADT/StringSwitch.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
@@ -38,6 +39,17 @@ const uint32_t *
 MIPSXRegisterInfo::getCallPreservedMask(const MachineFunction & /*MF*/,
                                         CallingConv::ID /*CC*/) const {
   return CSR_MIPSX_RegMask;
+}
+
+const uint32_t *
+MIPSXRegisterInfo::getHelperCallPreservedMask(StringRef Name) const {
+  return StringSwitch<const uint32_t *>(Name)
+      .Cases({"__mulsi3", "__udivsi3", "__lshrsi3", "__ashrsi3"},
+             CSR_MIPSX_R1R3_RegMask)
+      .Case("__ashlsi3", CSR_MIPSX_Ashl_RegMask)
+      .Case("__umodsi3", CSR_MIPSX_Umod_RegMask)
+      .Cases({"__divsi3", "__modsi3"}, CSR_MIPSX_Div_RegMask)
+      .Default(nullptr);
 }
 
 BitVector MIPSXRegisterInfo::getReservedRegs(const MachineFunction &MF) const {

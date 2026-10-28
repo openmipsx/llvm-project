@@ -110,6 +110,17 @@ def callseq_start : SDNode<"ISD::CALLSEQ_START", SDT_MIPSXCallSeqStart,
 def callseq_end : SDNode<"ISD::CALLSEQ_END", SDT_MIPSXCallSeqEnd,
                          [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue]>;
 
+def SDT_MIPSXSelectCC
+    : SDTypeProfile<1, 5, [SDTCisVT<0, i32>, SDTCisSameAs<0, 1>,
+                           SDTCisSameAs<1, 2>, SDTCisSameAs<3, 4>,
+                           SDTCisVT<5, i32>]>;
+// (select_cc true, false, lhs, rhs, condcode): lowered to a branch.
+def MIPSXselectcc : SDNode<"MIPSXISD::SELECT_CC", SDT_MIPSXSelectCC>;
+
+// Jump to a word address (a jump-table entry, abi section 5.6).
+def MIPSXbrindw : SDNode<"MIPSXISD::BRIND_W", SDTBrind,
+                         [SDNPHasChain]>;
+
 // Address operands of loads and stores: (base register or frame index,
 // 17-bit offset).
 def AddrRegImm : ComplexPattern<iPTR, 2, "selectAddrRegImm", [frameindex], []>;
@@ -295,12 +306,79 @@ def B : MIPSXInst<0b00, 0b001, (outs), (ins brtarget:$dst), "b\t$dst"> {
 }
 def : Pat<(br bb:$dst), (B bb:$dst)>;
 
+// Indirect branch to the word address in rs: jspci rs,#0,r0. Jump-table
+// entries are word addresses (docs/abi.md section 5.6); other targets, such
+// as block addresses, are byte addresses and are shifted right by 2 first
+// (abi section 4).
+let isBranch = 1, isIndirectBranch = 1, isTerminator = 1, isBarrier = 1,
+    hasDelaySlot = 1, isCodeGenOnly = 1 in
+def BRIND : MIPSXInst<0b11, 0b000, (outs), (ins GPR:$rs1), "jspci\t$rs1,#0,r0",
+                      [(MIPSXbrindw GPR:$rs1)]> {
+  bits<5> rs1;
+  let Inst{26-22} = rs1;
+  let Inst{21-0} = 0;
+}
+
+// Far jump: jspci r0,#%call(label),r0, for branches out of range of a
+// branch displacement (abi section 5.5). Inserted by branch relaxation.
+def jumptarget : Operand<OtherVT> {
+  let EncoderMethod = "getImm17OpValue";
+}
+let isBranch = 1, isTerminator = 1, isBarrier = 1, hasDelaySlot = 1,
+    isCodeGenOnly = 1 in
+def JMP : MIPSXInst<0b11, 0b000, (outs), (ins jumptarget:$dst),
+                    "jspci\tr0,#$dst,r0"> {
+  bits<17> dst;
+  let Inst{26-17} = 0;
+  let Inst{16-0} = dst;
+}
+
+// select_cc, expanded into a branch diamond by EmitInstrWithCustomInserter.
+let usesCustomInserter = 1 in
+def SELECT : Pseudo<(outs GPR:$rd),
+                    (ins GPR:$t, GPR:$f, GPR:$a, GPR:$b, i32imm:$cc),
+                    [(set GPR:$rd, (MIPSXselectcc GPR:$t, GPR:$f, GPR:$a,
+                                                  GPR:$b, timm:$cc))]>;
+
 //===----------------------------------------------------------------------===//
 // Patterns
 //===----------------------------------------------------------------------===//
 
-// Constants: one addi if they fit in 17 bits, otherwise the hi/lo form of
-// docs/abi.md section 6.1.
+def : Pat<(brind GPR:$rs1), (BRIND (SH GPR:$rs1, R0, 2))>;
+
+// Conditional branches. gt, le, ugt and ule swap the operands (abi section
+// 5.3).
+def : Pat<(brcc SETEQ, GPR:$a, GPR:$b, bb:$d), (BEQ GPR:$a, GPR:$b, bb:$d)>;
+def : Pat<(brcc SETNE, GPR:$a, GPR:$b, bb:$d), (BNE GPR:$a, GPR:$b, bb:$d)>;
+def : Pat<(brcc SETLT, GPR:$a, GPR:$b, bb:$d), (BLT GPR:$a, GPR:$b, bb:$d)>;
+def : Pat<(brcc SETGE, GPR:$a, GPR:$b, bb:$d), (BGE GPR:$a, GPR:$b, bb:$d)>;
+def : Pat<(brcc SETGT, GPR:$a, GPR:$b, bb:$d), (BLT GPR:$b, GPR:$a, bb:$d)>;
+def : Pat<(brcc SETLE, GPR:$a, GPR:$b, bb:$d), (BGE GPR:$b, GPR:$a, bb:$d)>;
+def : Pat<(brcc SETULT, GPR:$a, GPR:$b, bb:$d), (BLO GPR:$a, GPR:$b, bb:$d)>;
+def : Pat<(brcc SETUGE, GPR:$a, GPR:$b, bb:$d), (BHS GPR:$a, GPR:$b, bb:$d)>;
+def : Pat<(brcc SETUGT, GPR:$a, GPR:$b, bb:$d), (BLO GPR:$b, GPR:$a, bb:$d)>;
+def : Pat<(brcc SETULE, GPR:$a, GPR:$b, bb:$d), (BHS GPR:$b, GPR:$a, bb:$d)>;
+
+// Constants (docs/abi.md section 6.1): one addi if they fit in 17 bits,
+// two instructions for a 17-bit value shifted left, otherwise the hi/lo
+// form.
+def ShiftedImm17 : ImmLeaf<i32, [{
+  uint32_t V = Imm;
+  if (isInt<17>(Imm) || V == 0)
+    return false;
+  unsigned T = llvm::countr_zero(V);
+  return T > 0 && isInt<17>(int32_t(V) >> T);
+}]>;
+def ShiftedVal : SDNodeXForm<imm, [{
+  uint32_t V = N->getZExtValue();
+  return CurDAG->getSignedTargetConstant(int32_t(V) >> llvm::countr_zero(V),
+                                         SDLoc(N), MVT::i32);
+}]>;
+def ShiftedAmt : SDNodeXForm<imm, [{
+  uint32_t V = N->getZExtValue();
+  return CurDAG->getTargetConstant(32 - llvm::countr_zero(V), SDLoc(N),
+                                   MVT::i32);
+}]>;
 def HI17 : SDNodeXForm<imm, [{
   return CurDAG->getSignedTargetConstant(int32_t(N->getSExtValue()) >> 15,
                                          SDLoc(N), MVT::i32);
@@ -310,6 +388,9 @@ def LO15 : SDNodeXForm<imm, [{
                                    MVT::i32);
 }]>;
 def : Pat<(i32 simm17:$imm), (ADDI R0, simm17:$imm)>;
+let AddedComplexity = 1 in
+def : Pat<(i32 ShiftedImm17:$imm),
+          (SH R0, (ADDI R0, (ShiftedVal imm:$imm)), (ShiftedAmt imm:$imm))>;
 def : Pat<(i32 imm:$imm),
           (ADDI (SH R0, (ADDI R0, (HI17 imm:$imm)), 17), (LO15 imm:$imm))>;
 

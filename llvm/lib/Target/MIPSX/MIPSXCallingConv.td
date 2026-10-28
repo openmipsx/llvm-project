@@ -35,3 +35,18 @@ def RetCC_MIPSX : CallingConv<[
 // r31 explicitly.
 def CSR_MIPSX : CalleeSavedRegs<(add R31, R30, (sequence "R%u", 16, 22),
                                      R25, R26, R27)>;
+
+// Registers preserved by the SDK's 32-bit helper routines, from the clobber
+// lists in mipsx-sdk rt/builtins/README.md (abi section 7.4). A call to one
+// of them uses these instead of CSR_MIPSX, so the caller keeps more values
+// in registers. r31 is defined by the call itself.
+// __mulsi3, __udivsi3, __lshrsi3, __ashrsi3: change r1-r3 (and MD).
+def CSR_MIPSX_R1R3 : CalleeSavedRegs<(add (sequence "R%u", 4, 30))>;
+// __ashlsi3: changes r1-r3 and r5.
+def CSR_MIPSX_Ashl : CalleeSavedRegs<(add R4, (sequence "R%u", 6, 30))>;
+// __umodsi3: changes r1-r3, r15 (and MD).
+def CSR_MIPSX_Umod : CalleeSavedRegs<(add (sequence "R%u", 4, 14),
+                                          (sequence "R%u", 16, 30))>;
+// __divsi3, __modsi3: change r1-r5, r12, r13, r15 (and MD).
+def CSR_MIPSX_Div : CalleeSavedRegs<(add (sequence "R%u", 6, 11), R14,
+                                         (sequence "R%u", 16, 30))>;

@@ -56,6 +56,9 @@ public:
     return false;
   }
 
+  // Far branches (abi section 5.5); sizes include the padding added next.
+  void addPreEmitPass() override { addPass(&BranchRelaxationPassID); }
+
   // Must be last: fills the delay slots and pads the pipeline hazards.
   void addPreEmitPass2() override { addPass(createMIPSXHazardPaddingPass()); }
 };

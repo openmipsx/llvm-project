@@ -26,6 +26,7 @@ enum TOF {
   MO_NO_FLAG,
   MO_HI, // %hi(sym)
   MO_LO, // %lo(sym)
+  MO_CALL, // %call(sym)
 };
 } // namespace MIPSXII
 
@@ -59,14 +60,30 @@ public:
   Register isStoreToStackSlot(const MachineInstr &MI,
                               int &FrameIndex) const override;
 
-  // Conditional branches arrive in work package S9; until then no branch is
-  // analysable, which keeps the generic passes from rewriting them.
+  // Branches. Cond is {branch opcode, rs1, rs2}.
   bool analyzeBranch(MachineBasicBlock &MBB, MachineBasicBlock *&TBB,
                      MachineBasicBlock *&FBB,
                      SmallVectorImpl<MachineOperand> &Cond,
-                     bool AllowModify) const override {
-    return true;
-  }
+                     bool AllowModify) const override;
+  unsigned removeBranch(MachineBasicBlock &MBB,
+                        int *BytesRemoved = nullptr) const override;
+  unsigned insertBranch(MachineBasicBlock &MBB, MachineBasicBlock *TBB,
+                        MachineBasicBlock *FBB, ArrayRef<MachineOperand> Cond,
+                        const DebugLoc &DL,
+                        int *BytesAdded = nullptr) const override;
+  bool
+  reverseBranchCondition(SmallVectorImpl<MachineOperand> &Cond) const override;
+
+  // Branch relaxation (abi section 5.5).
+  unsigned getInstSizeInBytes(const MachineInstr &MI) const override;
+  bool isBranchOffsetInRange(unsigned BranchOpc,
+                             int64_t BrOffset) const override;
+  MachineBasicBlock *getBranchDestBlock(const MachineInstr &MI) const override;
+  void insertIndirectBranch(MachineBasicBlock &MBB,
+                            MachineBasicBlock &NewDestBB,
+                            MachineBasicBlock &RestoreBB, const DebugLoc &DL,
+                            int64_t BrOffset = 0,
+                            RegScavenger *RS = nullptr) const override;
 
   /// Add "addi Base,#Imm,Dest" before I, using r1 if Imm needs more than 17
   /// bits.

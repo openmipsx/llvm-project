@@ -78,6 +78,8 @@ static MIPSX::Specifier getSpecifier(const MachineOperand &MO) {
     return MIPSX::S_HI;
   case MIPSXII::MO_LO:
     return MIPSX::S_LO;
+  case MIPSXII::MO_CALL:
+    return MIPSX::S_CALL;
   }
   llvm_unreachable("Unknown target flag on a symbol operand");
 }
@@ -94,7 +96,14 @@ bool MIPSXAsmPrinter::lowerOperand(const MachineOperand &MO,
     MCOp = MCOperand::createImm(MO.getImm());
     return true;
   case MachineOperand::MO_MachineBasicBlock:
-    MCOp = lowerSymbolOperand(MO, MO.getMBB()->getSymbol(), MIPSX::S_None);
+    MCOp = lowerSymbolOperand(MO, MO.getMBB()->getSymbol(), getSpecifier(MO));
+    return true;
+  case MachineOperand::MO_JumpTableIndex:
+    MCOp = lowerSymbolOperand(MO, GetJTISymbol(MO.getIndex()), getSpecifier(MO));
+    return true;
+  case MachineOperand::MO_BlockAddress:
+    MCOp = lowerSymbolOperand(
+        MO, GetBlockAddressSymbol(MO.getBlockAddress()), getSpecifier(MO));
     return true;
   case MachineOperand::MO_GlobalAddress:
     MCOp = lowerSymbolOperand(MO, getSymbol(MO.getGlobal()), getSpecifier(MO));

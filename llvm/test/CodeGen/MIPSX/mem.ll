@@ -70,9 +70,8 @@ define void @sth(ptr %p, i16 %v) {
 ; An offset beyond 17 bits is added to the base first.
 define void @far_offset(ptr %p, i32 %v) {
 ; CHECK-LABEL: far_offset:
-; CHECK:      addi r0,#2,r2
-; CHECK-NEXT: lsl r2,r2,#15
-; CHECK-NEXT: addi r2,#0,r2
+; CHECK:      addi r0,#1,r2
+; CHECK-NEXT: lsl r2,r2,#16
 ; CHECK-NEXT: add r4,r2,r2
 ; CHECK-NEXT: st 0[r2],r5
   %q = getelementptr i8, ptr %p, i32 65536
