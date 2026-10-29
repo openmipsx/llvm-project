@@ -29,6 +29,7 @@
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/GlobalVariable.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/Target/TargetMachine.h"

@@ -9,6 +9,8 @@
 #ifndef LLVM_LIB_TARGET_MIPSX_MIPSXFRAMELOWERING_H
 #define LLVM_LIB_TARGET_MIPSX_MIPSXFRAMELOWERING_H
 
+#include "llvm/CodeGen/MachineFrameInfo.h"
+#include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/TargetFrameLowering.h"
 
 namespace llvm {
