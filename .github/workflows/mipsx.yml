@@ -109,6 +109,7 @@ jobs:
       - name: Build the sysroot (run-time, compiler-rt builtins, picolibc)
         run: |
           make -C mipsx-sdk libc MIPSX_LLVM_BIN="$PWD/build/bin" \
+            COMPILER_RT="$PWD/llvm-project/compiler-rt/lib/builtins" \
             PICOLIBC_SRC="$PWD/picolibc"
           make -C mipsx-sdk check-llvm MIPSX_LLVM_BIN="$PWD/build/bin"
 
@@ -156,6 +157,7 @@ jobs:
             https://github.com/llvm/llvm-test-suite llvm-test-suite
           cd mipsx-sdk
           python3 tests/run_tests.py builtins --llvm-bin ../build/bin \
+            --compiler-rt ../llvm-project/compiler-rt \
             --results build/builtins.tsv -v
           python3 tests/run_tests.py torture --llvm-bin ../build/bin \
             --src ../llvm-test-suite/SingleSource/Regression/C/gcc-c-torture/execute \
