@@ -598,8 +598,9 @@ bool MIPSXAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
     return false;
 
   MCInst Inst;
-  unsigned Result =
-      MatchInstructionImpl(Operands, Inst, ErrorInfo, MatchingInlineAsm);
+  FeatureBitset MissingFeatures;
+  unsigned Result = MatchInstructionImpl(Operands, Inst, ErrorInfo,
+                                         MissingFeatures, MatchingInlineAsm);
 
   SMLoc ErrorLoc = IDLoc;
   if (ErrorInfo != ~0ULL && ErrorInfo < Operands.size()) {
@@ -615,6 +616,9 @@ bool MIPSXAsmParser::matchAndEmitInstruction(SMLoc IDLoc, unsigned &Opcode,
     Opcode = Inst.getOpcode();
     return false;
   case Match_MissingFeature:
+    if (MissingFeatures.test(Feature_HasVShiftBit))
+      return Error(IDLoc, "instruction requires the ES3890 variable shift "
+                          "(-mcpu=es3890 or -mattr=+vshift)");
     return Error(IDLoc, "instruction requires the ES3890 (-mcpu=es3890)");
   case Match_MnemonicFail:
     return Error(IDLoc, "unrecognized instruction mnemonic");

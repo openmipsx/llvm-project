@@ -83,3 +83,6 @@ lsr r1,r2,#0
 ; CHECK: :[[@LINE-1]]:12: error: shift amount must be in the range [1, 32]
 lsl r1,r2,#n
 ; CHECK: :[[@LINE-1]]:12: error: shift amount must be in the range [0, 31]
+; The manual's name for Func 0x080; it is shlv (spec section 5).
+rotlcb r1,r2,r3
+; CHECK: :[[@LINE-1]]:1: error: unrecognized instruction mnemonic

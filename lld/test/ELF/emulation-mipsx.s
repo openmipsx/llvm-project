@@ -18,6 +18,10 @@
 # RUN: llvm-readobj --file-headers out4 | FileCheck --check-prefix=GENERIC %s
 # RUN: ld.lld generic2.o es3890.o -o out5
 # RUN: llvm-readobj --file-headers out5 | FileCheck --check-prefix=ES3890 %s
+# RUN: llvm-mc -filetype=obj -triple=mipsx -mcpu=mipsx -mattr=+es3890 b.s -o bytes.o
+# RUN: llvm-mc -filetype=obj -triple=mipsx -mcpu=mipsx -mattr=+vshift a.s -o vshift.o
+# RUN: ld.lld bytes.o vshift.o -o out6
+# RUN: llvm-readobj --file-headers out6 | FileCheck --check-prefix=ES3890 %s
 
 ## e_flags is the big-endian word at offset 36.
 # RUN: llvm-mc -filetype=obj -triple=mipsx b.s -o bad.o
@@ -28,8 +32,9 @@
 # CHECK-NEXT: DataEncoding: BigEndian (0x2)
 # CHECK:      Type: Executable (0x2)
 # CHECK-NEXT: Machine: EM_MIPS_X (0x33)
-# ES3890:     Flags [ (0x1)
+# ES3890:     Flags [ (0x3)
 # ES3890-NEXT:  EF_MIPSX_ES3890 (0x1)
+# ES3890-NEXT:  EF_MIPSX_VSHIFT (0x2)
 # GENERIC:    Flags [ (0x0)
 # BAD: error: bad.o: unknown e_flags 0x4
 

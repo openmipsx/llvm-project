@@ -194,7 +194,13 @@ def NOT : FCompute<0b100, 0x00F, (outs GPR:$rd), (ins GPR:$rs1),
                    "not\t$rs1,$rd">;
 
 def ROTLB  : ALU3<0b001, 0x0C0, "rotlb">;
-def ROTLCB : ALU3<0b001, 0x080, "rotlcb">;
+// Shifts by the signed count in Src2: left if Src2 >= 0, else right by
+// -Src2, shifting in zeros (shlv) or sign bits (shav). Spec section 5;
+// the manual calls Func 0x080 rotlcb.
+let Predicates = [HasVShift] in {
+  def SHLV : ALU3<0b001, 0x080, "shlv">;
+  def SHAV : ALU3<0b001, 0x180, "shav">;
+}
 
 // Multiply and divide steps use and update MD.
 let Uses = [MD], Defs = [MD] in {

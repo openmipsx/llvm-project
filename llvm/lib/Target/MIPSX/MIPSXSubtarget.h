@@ -24,6 +24,7 @@ namespace llvm {
 
 class MIPSXSubtarget : public MIPSXGenSubtargetInfo {
   bool HasES3890 = false;
+  bool HasVShift = false;
   bool UseLongCalls = false;
 
   MIPSXInstrInfo InstrInfo;
@@ -42,6 +43,7 @@ public:
   void ParseSubtargetFeatures(StringRef CPU, StringRef TuneCPU, StringRef FS);
 
   bool hasES3890() const { return HasES3890; }
+  bool hasVShift() const { return HasVShift; }
 
   // Schedule before and after register allocation, so that loads are
   // separated from their uses (MIPSXSchedule.td).

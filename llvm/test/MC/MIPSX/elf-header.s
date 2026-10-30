@@ -7,6 +7,9 @@
 ; RUN: llvm-readobj -h %t.es.o | FileCheck --check-prefix=ES3890 %s
 ; RUN: llvm-mc -triple=mipsx -mcpu=mipsx -filetype=obj %s -o %t.generic.o
 ; RUN: llvm-readobj -h %t.generic.o | FileCheck --check-prefix=GENERIC %s
+; RUN: llvm-mc -triple=mipsx -mcpu=mipsx -mattr=+vshift -filetype=obj %s \
+; RUN:   -o %t.vshift.o
+; RUN: llvm-readobj -h %t.vshift.o | FileCheck --check-prefix=VSHIFT %s
 ; RUN: llvm-objdump -d %t.o | FileCheck --check-prefix=OBJDUMP %s
 
   call f
@@ -17,16 +20,20 @@
 ; CHECK:      DataEncoding: BigEndian
 ; CHECK:      Type: Relocatable
 ; CHECK-NEXT: Machine: EM_MIPS_X
-; ES3890:     Flags [ (0x1)
+; ES3890:     Flags [ (0x3)
 ; ES3890-NEXT:  EF_MIPSX_ES3890 (0x1)
+; ES3890-NEXT:  EF_MIPSX_VSHIFT (0x2)
 ; ES3890-NEXT: ]
 ; GENERIC:    Flags [ (0x0)
 ; GENERIC-NEXT: ]
+; VSHIFT:     Flags [ (0x2)
+; VSHIFT-NEXT:  EF_MIPSX_VSHIFT (0x2)
+; VSHIFT-NEXT: ]
 ; CHECK:      Name: .rela.text
 ; CHECK-NEXT: Type: SHT_RELA
 
 ; GNU: Machine: Stanford MIPS-X
-; GNU: Flags: 0x1, es3890
+; GNU: Flags: 0x3, es3890, vshift
 
 ; OBJDUMP: file format elf32-mipsx
 ; OBJDUMP: jspci r0,#0,r31

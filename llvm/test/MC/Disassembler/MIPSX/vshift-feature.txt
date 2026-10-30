@@ -1,0 +1,18 @@
+# The shifts by a register amount decode only with the vshift feature (the
+# default CPU).
+# RUN: llvm-mc -triple=mipsx -disassemble %s | FileCheck %s
+# RUN: llvm-mc -triple=mipsx -mcpu=mipsx -disassemble %s 2>&1 >/dev/null \
+# RUN:   | FileCheck --check-prefix=MIPSX %s
+# RUN: llvm-mc -triple=mipsx -mcpu=mipsx -disassemble %s 2>/dev/null \
+# RUN:   | FileCheck --check-prefix=MIPSX-OUT %s
+
+0x48 0x44 0x30 0xc0
+# CHECK: rotlb r1,r2,r3
+# MIPSX-OUT: rotlb r1,r2,r3
+# MIPSX-OUT-NOT: {{sh[al]v}}
+0x48 0x44 0x30 0x80
+# CHECK: shlv r1,r2,r3
+# MIPSX: [[@LINE-2]]:1: warning: invalid instruction encoding
+0x48 0x44 0x31 0x80
+# CHECK: shav r1,r2,r3
+# MIPSX: [[@LINE-2]]:1: warning: invalid instruction encoding

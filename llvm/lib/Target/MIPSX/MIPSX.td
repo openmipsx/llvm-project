@@ -27,6 +27,13 @@ def HasES3890 : Predicate<"Subtarget->hasES3890()">,
                 AssemblerPredicate<(all_of FeatureES3890),
                                    "ES3890 byte and halfword memory access">;
 
+def FeatureVShift
+    : SubtargetFeature<"vshift", "HasVShift", "true",
+                       "ES3890 shifts by a register amount (shav, shlv)">;
+def HasVShift : Predicate<"Subtarget->hasVShift()">,
+                AssemblerPredicate<(all_of FeatureVShift),
+                                   "ES3890 variable shift">;
+
 def FeatureLongCalls
     : SubtargetFeature<"long-calls", "UseLongCalls", "true",
                        "Make direct calls through a register (any reach)">;
@@ -49,8 +56,10 @@ def MIPSXInstrInfo : InstrInfo;
 //===----------------------------------------------------------------------===//
 
 def : ProcessorModel<"mipsx", MIPSXSchedModel, []>;
-def : ProcessorModel<"es3890", MIPSXSchedModel, [FeatureES3890]>;
-def : ProcessorModel<"generic", MIPSXSchedModel, [FeatureES3890]>;
+def : ProcessorModel<"es3890", MIPSXSchedModel,
+                     [FeatureES3890, FeatureVShift]>;
+def : ProcessorModel<"generic", MIPSXSchedModel,
+                     [FeatureES3890, FeatureVShift]>;
 
 //===----------------------------------------------------------------------===//
 // Assembly syntax

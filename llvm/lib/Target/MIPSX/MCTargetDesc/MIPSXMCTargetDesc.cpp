@@ -122,6 +122,8 @@ public:
     unsigned EFlags = W.getELFHeaderEFlags();
     if (STI.hasFeature(MIPSX::FeatureES3890))
       EFlags |= ELF::EF_MIPSX_ES3890;
+    if (STI.hasFeature(MIPSX::FeatureVShift))
+      EFlags |= ELF::EF_MIPSX_VSHIFT;
     W.setELFHeaderEFlags(EFlags);
   }
 };

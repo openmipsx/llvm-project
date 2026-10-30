@@ -715,7 +715,7 @@ enum {
 // MIPS-X specific e_flags (MIPS-X SDK docs/abi.md section 11.2).
 enum : unsigned {
   EF_MIPSX_ES3890 = 0x00000001, // ES3890 byte and halfword loads and stores
-  EF_MIPSX_VSHIFT = 0x00000002, // Reserved: ES3890 variable shift
+  EF_MIPSX_VSHIFT = 0x00000002, // ES3890 shifts by a register amount
 };
 
 // RISCV Specific e_flags
