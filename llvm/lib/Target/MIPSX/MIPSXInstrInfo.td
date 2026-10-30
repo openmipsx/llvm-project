@@ -231,9 +231,9 @@ let hasSideEffects = 1 in {
                          "movfrs\t$spr,$rd"> {
     bits<5> rd;
     bits<3> spr;
-    let Inst{26-17} = 0;
-    let Inst{16-12} = rd;
-    let Inst{11-3} = 0;
+    let Inst{26-22} = 0;
+    let Inst{21-17} = rd; // Src2 field, like addi; bits 16-12 are 0
+    let Inst{16-3} = 0;
     let Inst{2-0} = spr;
   }
 

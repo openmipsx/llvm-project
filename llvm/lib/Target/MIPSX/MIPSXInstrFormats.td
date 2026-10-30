@@ -12,8 +12,8 @@
 //   31-30 TY    00 branch, 01 compute, 10 memory, 11 compute immediate
 //   29-27 OP    (COND for branches)
 //   26-22 Src1
-//   21-17 Src2  (Dest for loads, addi and jspci)
-//   16-12 Dest  (compute instructions and movfrs)
+//   21-17 Src2  (Dest for loads, addi, jspci and movfrs)
+//   16-12 Dest  (compute instructions)
 //   11-0  Comp Func
 //   16-0  Offset / Immed, 17-bit signed
 //   16    SQ (branches), 15-0 Disp (branches, in words)

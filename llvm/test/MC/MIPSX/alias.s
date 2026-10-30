@@ -35,7 +35,7 @@ add sp,fp,ra
 ADD R1,R2,R3
 ; CHECK: add r1,r2,r3 ; encoding: [0x60,0x44,0x30,0x19]
 Movfrs PSW,R4
-; CHECK: movfrs psw,r4 ; encoding: [0xd8,0x00,0x40,0x01]
+; CHECK: movfrs psw,r4 ; encoding: [0xd8,0x08,0x00,0x01]
 addi r1 , # -3 , r2
 ; CHECK: addi r1,#-3,r2 ; encoding: [0xe0,0x45,0xff,0xfd]
 addi r0,#(1<<16)-1,r2
