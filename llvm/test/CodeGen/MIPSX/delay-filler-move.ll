@@ -97,3 +97,95 @@ t:
 !0 = !{!"branch_weights", i32 1, i32 1}
 !1 = !{!"branch_weights", i32 1, i32 1}
 
+
+; A realigned frame restores r29 from r30 in the epilogue. That restore
+; must not move into a slot of the loop branch: on the taken path it would
+; set r29 to the unaligned value and shift every later stack access.
+declare void @use(ptr)
+
+define void @no_sp_from_fallthrough(i32 %n) {
+; CHECK-LABEL: no_sp_from_fallthrough:
+; CHECK:       ; %bb.0: ; %entry
+; CHECK-NEXT:    addi r29,#-48,r29
+; CHECK-NEXT:    .cfi_def_cfa_offset 48
+; CHECK-NEXT:    addi r0,#-16,r1
+; CHECK-NEXT:    st 40[r29],r30 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_offset r30, -8
+; CHECK-NEXT:    st 44[r29],r31 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_escape 0x16, 0x1f, 0x05, 0x34, 0x1c, 0x06, 0x32, 0x24 ; r31 = [CFA-4] * 4
+; CHECK-NEXT:    st 36[r29],r16 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_offset r16, -12
+; CHECK-NEXT:    st 32[r29],r17 ; 4-byte Folded Spill
+; CHECK-NEXT:    .cfi_offset r17, -16
+; CHECK-NEXT:    addi r29,#48,r30
+; CHECK-NEXT:    .cfi_def_cfa r30, 0
+; CHECK-NEXT:    and r29,r1,r29
+; CHECK-NEXT:    mov r4,r16
+; CHECK-NEXT:    addi r29,#0,r17
+; CHECK-NEXT:  .LBB2_1: ; %loop
+; CHECK-NEXT:    ; =>This Inner Loop Header: Depth=1
+; CHECK-NEXT:    jspci r0,#%call(use),r31
+; CHECK-NEXT:    mov r17,r4
+; CHECK-NEXT:    nop
+; CHECK-NEXT:    addi r16,#-1,r16
+; CHECK-NEXT:    bne r16,r0,.LBB2_1
+; CHECK-NEXT:    nop
+; CHECK-NEXT:    nop
+; CHECK-NEXT:  ; %bb.2: ; %exit
+; CHECK-NEXT:    addi r30,#-48,r29
+; CHECK-NEXT:    ld 32[r29],r17 ; 4-byte Folded Reload
+; CHECK-NEXT:    ld 36[r29],r16 ; 4-byte Folded Reload
+; CHECK-NEXT:    ld 44[r29],r31 ; 4-byte Folded Reload
+; CHECK-NEXT:    nop
+; CHECK-NEXT:    ret
+; CHECK-NEXT:    ld 40[r29],r30
+; CHECK-NEXT:    addi r29,#48,r29
+;
+; NOFT-LABEL: no_sp_from_fallthrough:
+; NOFT:       ; %bb.0: ; %entry
+; NOFT-NEXT:    addi r29,#-48,r29
+; NOFT-NEXT:    .cfi_def_cfa_offset 48
+; NOFT-NEXT:    addi r0,#-16,r1
+; NOFT-NEXT:    st 40[r29],r30 ; 4-byte Folded Spill
+; NOFT-NEXT:    .cfi_offset r30, -8
+; NOFT-NEXT:    st 44[r29],r31 ; 4-byte Folded Spill
+; NOFT-NEXT:    .cfi_escape 0x16, 0x1f, 0x05, 0x34, 0x1c, 0x06, 0x32, 0x24 ; r31 = [CFA-4] * 4
+; NOFT-NEXT:    st 36[r29],r16 ; 4-byte Folded Spill
+; NOFT-NEXT:    .cfi_offset r16, -12
+; NOFT-NEXT:    st 32[r29],r17 ; 4-byte Folded Spill
+; NOFT-NEXT:    .cfi_offset r17, -16
+; NOFT-NEXT:    addi r29,#48,r30
+; NOFT-NEXT:    .cfi_def_cfa r30, 0
+; NOFT-NEXT:    and r29,r1,r29
+; NOFT-NEXT:    mov r4,r16
+; NOFT-NEXT:    addi r29,#0,r17
+; NOFT-NEXT:  .LBB2_1: ; %loop
+; NOFT-NEXT:    ; =>This Inner Loop Header: Depth=1
+; NOFT-NEXT:    jspci r0,#%call(use),r31
+; NOFT-NEXT:    mov r17,r4
+; NOFT-NEXT:    nop
+; NOFT-NEXT:    addi r16,#-1,r16
+; NOFT-NEXT:    bne r16,r0,.LBB2_1
+; NOFT-NEXT:    nop
+; NOFT-NEXT:    nop
+; NOFT-NEXT:  ; %bb.2: ; %exit
+; NOFT-NEXT:    addi r30,#-48,r29
+; NOFT-NEXT:    ld 32[r29],r17 ; 4-byte Folded Reload
+; NOFT-NEXT:    ld 36[r29],r16 ; 4-byte Folded Reload
+; NOFT-NEXT:    ld 44[r29],r31 ; 4-byte Folded Reload
+; NOFT-NEXT:    nop
+; NOFT-NEXT:    ret
+; NOFT-NEXT:    ld 40[r29],r30
+; NOFT-NEXT:    addi r29,#48,r29
+entry:
+  %buf = alloca [32 x i8], align 16
+  br label %loop
+loop:
+  %i = phi i32 [ 0, %entry ], [ %i.next, %loop ]
+  call void @use(ptr %buf)
+  %i.next = add i32 %i, 1
+  %c = icmp ne i32 %i.next, %n
+  br i1 %c, label %loop, label %exit
+exit:
+  ret void
+}

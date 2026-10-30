@@ -26,8 +26,9 @@
 //    unfilled after (1) and is the only way into the block it falls
 //    through to takes that block's first instructions, if they do not
 //    store, load only from the stack or small data (an address that is
-//    always valid), and set no register live at the taken target, so that
-//    executing them on the taken path does no harm.
+//    always valid), and set no register live at the taken target and no
+//    reserved register, so that executing them on the taken path does no
+//    harm.
 //
 // Slot contents follow section 9.2: no branch, jump or call in a slot, no
 // load in the second slot, and a load in the first slot only if the second
@@ -478,6 +479,7 @@ unsigned MIPSXDelaySlotFiller::fillFromFallThrough(MachineBasicBlock &MBB,
   if (Slots.size() >= 2)
     return 0;
 
+  const MachineRegisterInfo &MRI = MBB.getParent()->getRegInfo();
   SmallVector<MachineInstr *, 2> Moved;
   for (MachineInstr &MI : FT->instrs()) {
     if (MI.isDebugInstr())
@@ -490,11 +492,16 @@ unsigned MIPSXDelaySlotFiller::fillFromFallThrough(MachineBasicBlock &MBB,
       if (Base != MIPSX::R29 && Base != MIPSX::R30 && Base != MIPSX::R28)
         break;
     }
+    // Reserved registers (r29, r30, r28) are not in live-in lists, so
+    // liveness cannot show that setting one is harmless at the target:
+    // an epilogue's `addi r30,#-n,r29` undoes a realigned stack pointer.
     bool LiveAtTarget = false;
     for (const MachineOperand &MO : MI.operands())
-      if (MO.isReg() && MO.isDef() && MO.getReg())
+      if (MO.isReg() && MO.isDef() && MO.getReg()) {
+        LiveAtTarget |= MRI.isReserved(MO.getReg());
         for (MCRegAliasIterator A(MO.getReg(), TRI, true); A.isValid(); ++A)
           LiveAtTarget |= Target->isLiveIn(*A);
+      }
     if (LiveAtTarget)
       break;
     const MachineInstr *Prev =
