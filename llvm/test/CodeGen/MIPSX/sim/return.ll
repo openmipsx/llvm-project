@@ -1,4 +1,4 @@
-; main's result is the exit status (crt0 calls exit(main(0, 0))).
+; main's result is the exit status (crt0 calls exit(main(argc, argv))).
 ; RUN: llc -mtriple=mipsx -filetype=obj %s -o %t.o
 ; RUN: %mipsx-link -o %t %t.o
 ; RUN: %mipsx-run --expect-exit=42 %t

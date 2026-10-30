@@ -3,8 +3,9 @@
 
 mipsx-link.py --sdk SDK --bin LLVM_BIN -o OUT OBJ...
 
-Assembles SDK/rt/crt0.S and SDK/rt/exit-sim.S with llvm-mc (next to OUT)
-and links them before OBJ with ld.lld and SDK/rt/sim.ld. With --builtins,
+Assembles SDK/rt/crt0.S, SDK/rt/exit-sim.S and SDK/rt/args-sim.S (crt0's
+argv hooks, in SDKs that have them) with llvm-mc (next to OUT) and links
+them before OBJ with ld.lld and SDK/rt/sim.ld. With --builtins,
 the helper routines in SDK/rt/builtins (multiply, divide, variable shifts)
 are linked too.
 """
@@ -27,6 +28,8 @@ def main():
 
     rt = os.path.join(a.sdk, "rt")
     sources = [os.path.join(rt, "crt0.S"), os.path.join(rt, "exit-sim.S")]
+    if os.path.exists(os.path.join(rt, "args-sim.S")):
+        sources.append(os.path.join(rt, "args-sim.S"))
     if a.builtins:
         sources += sorted(glob.glob(os.path.join(rt, "builtins", "*.S")))
     start = []
